@@ -1,4 +1,4 @@
-<h1>This is a vibe-coded version of the classic game Space Invaders</h1>
+<h1>Vibe-coded version of the classic game Space Invaders</h1>
 
 <b>The actual game is a Flask app in the subdirectory codespaces-flask-1!</b>
 
