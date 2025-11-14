@@ -5,7 +5,7 @@ This project is a simple Flask web application that features a Space Invaders ga
 ## Project Structure
 
 ```
-codespaces-flask
+codespaces-flask-1
 ├── app.py                # Main entry point of the Flask application
 ├── requirements.txt      # Lists dependencies required for the application
 ├── templates
@@ -23,7 +23,7 @@ codespaces-flask
 1. **Clone the Repository**
    ```bash
    git clone <repository-url>
-   cd codespaces-flask
+   cd codespaces-flask-1
    ```
 
 2. **Install Dependencies**
