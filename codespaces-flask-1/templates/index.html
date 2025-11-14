@@ -1,27 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>{{ title }}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Invaders Game</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
 </head>
-
 <body>
-    <div class="App">
-        <header class="App-header">
-            <img src="{{ url_for('static', filename='Octocat.png') }}" class="App-logo" alt="logo" />
-            <p>
-                GitHub Codespaces <span class="heart">♥️</span> Flask
-            </p>
-            <p class="small">
-                Edit <code>templates/index.html</code> and refresh to see your changes!
-            </p>
-            
+    <div class="container">
+        <header>
+            <h1>Welcome to Dagfinn Dybvig</h1>
+            <p>Defend Earth from the alien invasion!</p>
+        </header>
+        
+        <main>
             <!-- Space Invader Canvas -->
             <div class="space-invader-demo">
                 <h3>Space Invader Preview</h3>
                 <canvas id="invaderCanvas" width="100" height="60"></canvas>
                 <br>
-                <a href="/space" class="play-button">Play Space Invaders!</a>
+                <a href="/space" class="heart">Play Space Invaders!</a>
             </div>
-        </header>
+            
+            <div class="instructions">
+                <h3>How to Play:</h3>
+                <ul>
+                    <li>Use ← → arrow keys to move</li>
+                    <li>Press SPACEBAR to shoot</li>
+                    <li>Destroy all invaders to win!</li>
+                    <li>Don't let them reach you!</li>
+                    <li>Press "s" to toggle auto-play</li>
+                    <li>Let the computer paly to enter high-score table</li>
+                    
+                </ul>
+            </div>
+        </main>
     </div>
 
     <script>
