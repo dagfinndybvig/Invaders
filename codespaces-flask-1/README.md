@@ -23,7 +23,7 @@ codespaces-flask-1
 1. **Clone the Repository**
    ```bash
    git clone <repository-url>
-   cd codespaces-flask-1
+   cd <path-to-codespaces-flask-1>
    ```
 
 2. **Install Dependencies**
