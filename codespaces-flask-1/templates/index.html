@@ -2,9 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Invaders Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Space Invaders Game - Dagfinn Dybvig</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+    <meta name="description" content="Play the classic Space Invaders game! Defend Earth from alien invasion with responsive mobile controls.">
+    <meta name="theme-color" content="#282c34">
 </head>
 <body>
     <div class="container">
@@ -25,13 +27,14 @@
             <div class="instructions">
                 <h3>How to Play:</h3>
                 <ul>
-                    <li>Use ← → arrow keys to move</li>
-                    <li>Press SPACEBAR to shoot</li>
+                    <li><strong>Desktop:</strong> Use ← → arrow keys to move</li>
+                    <li><strong>Desktop:</strong> Press SPACEBAR to shoot</li>
+                    <li><strong>Mobile:</strong> Touch controls automatically appear</li>
                     <li>Destroy all invaders to win!</li>
                     <li>Don't let them reach you!</li>
                     <li>Press "s" to toggle auto-play</li>
-                    <li>Let the computer play to enter high-score table</li>
-                    <li>Sorry no mobile</li>                    
+                    <li>Auto-play mode enters high-score table</li>
+                    <li><strong>Mobile users:</strong> Game auto-enables touch controls</li>                    
                 </ul>
             </div>
         </main>

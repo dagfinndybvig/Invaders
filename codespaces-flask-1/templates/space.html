@@ -2,16 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Invaders</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Space Invaders - Play Now!</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}">
+    <meta name="description" content="Play Space Invaders with mobile touch controls! Classic arcade game optimized for all devices.">
+    <meta name="theme-color" content="#000000">
 </head>
 <body>
     <div class="game-container">
         <h1>Space Invaders</h1>
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div class="controls">
-            <p>Use arrow keys to move and spacebar to shoot - press "s" for auto-play!</p>
+            <p id="controlText">Use arrow keys to move and spacebar to shoot - press "s" for auto-play!</p>
+        </div>
+        
+        <!-- Touch Controls for Mobile -->
+        <div class="touch-controls" id="touchControls">
+            <div class="touch-buttons">
+                <div class="touch-btn" id="leftBtn">←</div>
+                <div class="touch-btn touch-shoot" id="shootBtn">🚀</div>
+                <div class="touch-btn" id="rightBtn">→</div>
+            </div>
+            <div class="touch-autoplay">
+                <div class="autoplay-btn" id="autoplayBtn">S</div>
+            </div>
         </div>
     </div>
     <script src="{{ url_for('static', filename='js/space.js') }}"></script>

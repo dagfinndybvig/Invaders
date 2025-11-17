@@ -19,7 +19,7 @@ let bombDropChance = 0.001; // Probability per frame per enemy
 let baseBombDropChance = 0.001; // Base bomb drop rate
 let saucerSpawnChance = 0.002; // Increased from 0.0005 to 0.002 (0.2% chance per frame)
 let saucerSpeed = 2;
-let autoPlay = false; // Auto-play feature toggle
+let autoPlay = false; // Auto-play feature toggle (start with OFF)
 let autoPlayShootTimer = 0; // Timer for auto-shooting
 let gameOverDisplayTime = 0; // Track frames since game over
 let round = 1; // Current round number
@@ -38,13 +38,232 @@ let audioContext;
 let shootSound;
 
 function init() {
+    // Initialize responsive canvas
+    resizeCanvas();
+    
     player = { x: canvas.width / 2 - 15, y: canvas.height - 30, width: 30, height: 30 };
     createEnemies();
     createBarriers();
     initAudio();
     loadHighScores();
+    
+    // Setup input handlers
     document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', resizeCanvas);
+    
+    // Add touch handler for mobile high score screen
+    canvas.addEventListener('touchend', handleCanvasTouch);
+    
+    // Setup mobile touch controls
+    setupTouchControls();
+    
+    // Auto-detect mobile and enable touch controls
+    detectMobile();
+    
     requestAnimationFrame(gameLoop);
+}
+
+// Mobile detection and responsive canvas sizing
+function detectMobile() {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                     window.innerWidth <= 768;
+    
+    if (isMobile) {
+        // Show touch controls
+        const touchControls = document.getElementById('touchControls');
+        if (touchControls) {
+            touchControls.style.display = 'block';
+        }
+        
+        // Update control text for mobile
+        const controlText = document.getElementById('controlText');
+        if (controlText) {
+            controlText.textContent = 'Use touch controls below to move and shoot!';
+        }
+        
+        // Start with autoplay OFF on mobile (user can toggle)
+        autoPlay = false;
+        updateAutoplayButton();
+    }
+}
+
+// Helper function to check if user is on mobile
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+           window.innerWidth <= 768;
+}
+
+function resizeCanvas() {
+    const container = canvas.parentElement;
+    const containerWidth = container.clientWidth;
+    const maxWidth = Math.min(800, containerWidth - 20);
+    const aspectRatio = 600 / 800;
+    const newHeight = maxWidth * aspectRatio;
+    
+    // Update canvas display size
+    canvas.style.width = maxWidth + 'px';
+    canvas.style.height = newHeight + 'px';
+    
+    // Keep internal resolution for consistent game logic
+    // but scale the display
+    const scaleX = canvas.width / maxWidth;
+    const scaleY = canvas.height / newHeight;
+    
+    // Store scale for touch coordinate conversion
+    canvas.scaleX = scaleX;
+    canvas.scaleY = scaleY;
+}
+
+// Touch controls setup
+function setupTouchControls() {
+    const leftBtn = document.getElementById('leftBtn');
+    const rightBtn = document.getElementById('rightBtn');
+    const shootBtn = document.getElementById('shootBtn');
+    
+    if (!leftBtn || !rightBtn || !shootBtn) return;
+    
+    // Movement buttons
+    let leftPressed = false;
+    let rightPressed = false;
+    
+    // Add haptic feedback function
+    function hapticFeedback() {
+        if (navigator.vibrate) {
+            navigator.vibrate(50); // 50ms vibration
+        }
+    }
+    
+    // Left button
+    leftBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        leftPressed = true;
+        leftBtn.style.transform = 'scale(0.9)';
+        hapticFeedback();
+    });
+    
+    leftBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        leftPressed = false;
+        leftBtn.style.transform = 'scale(1)';
+    });
+    
+    // Right button
+    rightBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        rightPressed = true;
+        rightBtn.style.transform = 'scale(0.9)';
+        hapticFeedback();
+    });
+    
+    rightBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        rightPressed = false;
+        rightBtn.style.transform = 'scale(1)';
+    });
+    
+    // Shoot button
+    shootBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        shootBtn.style.transform = 'scale(0.9)';
+        if (!gameOver && shootCooldown <= 0) {
+            shoot();
+            hapticFeedback();
+        }
+    });
+    
+    shootBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        shootBtn.style.transform = 'scale(1)';
+    });
+    
+    // Store touch state for game loop
+    window.touchControls = {
+        left: () => leftPressed,
+        right: () => rightPressed
+    };
+    
+    // Prevent scrolling and zooming on touch controls
+    document.addEventListener('touchmove', (e) => {
+        if (e.target.classList.contains('touch-btn') || e.target.classList.contains('autoplay-btn')) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    // Prevent double-tap zoom on touch controls
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+        const now = (new Date()).getTime();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, false);
+    
+    // Setup autoplay toggle button with delay to ensure DOM is ready
+    setTimeout(() => {
+        const autoplayBtn = document.getElementById('autoplayBtn');
+        if (autoplayBtn) {
+            console.log('Autoplay button found, setting up events');
+            
+            // Use touchend for mobile and click for desktop
+            autoplayBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Autoplay touchend triggered');
+                toggleAutoPlay();
+                hapticFeedback();
+            });
+            
+            autoplayBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Autoplay click triggered');
+                toggleAutoPlay();
+                hapticFeedback();
+            });
+            
+            // Prevent touchstart from interfering
+            autoplayBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Autoplay touchstart');
+            });
+            
+            console.log('Autoplay button initialized');
+        } else {
+            console.log('Autoplay button not found');
+        }
+    }, 100);
+}
+
+// Haptic feedback function
+function hapticFeedback() {
+    if (navigator.vibrate) {
+        navigator.vibrate(50);
+    }
+}
+
+// Toggle autoplay and update button
+function toggleAutoPlay() {
+    autoPlay = !autoPlay;
+    console.log('Toggling autoplay to:', autoPlay);
+    updateAutoplayButton();
+    updateControlText();
+}
+
+// Update autoplay button appearance
+function updateAutoplayButton() {
+    const autoplayBtn = document.getElementById('autoplayBtn');
+    console.log('Updating autoplay button, autoPlay is:', autoPlay, 'button found:', !!autoplayBtn);
+    if (autoplayBtn) {
+        // Always show 'S', just change the visual state
+        autoplayBtn.textContent = 'S';
+        if (autoPlay) {
+            autoplayBtn.classList.add('active');
+        } else {
+            autoplayBtn.classList.remove('active');
+        }
+    }
 }
 
 function initAudio() {
@@ -137,6 +356,23 @@ function moveSaucer() {
     }
 }
 
+// Handle canvas touches for mobile high score navigation and game restart
+function handleCanvasTouch(event) {
+    event.preventDefault();
+    
+    // Only handle touch if on mobile
+    if (isMobileDevice()) {
+        // Handle high score screen
+        if (showingHighScoreEntry && !enteringName) {
+            showingHighScoreEntry = false;
+        }
+        // Handle game over screen restart
+        else if (gameOver && !showingHighScoreEntry) {
+            restartGame();
+        }
+    }
+}
+
 function handleKeyDown(event) {
     // Handle name input during high score entry
     if (enteringName) {
@@ -183,6 +419,7 @@ function handleKeyDown(event) {
     
     if (gameOver) return; // Don't process other keys if game is over
     
+    // Keyboard movement (only if not auto-play)
     if (event.key === 'ArrowLeft' && player.x > 0 && !autoPlay) {
         player.x -= 15;
     } else if (event.key === 'ArrowRight' && player.x < canvas.width - player.width && !autoPlay) {
@@ -198,8 +435,23 @@ function handleKeyDown(event) {
         shoot();
     } else if (event.key === 's' || event.key === 'S') {
         // Toggle auto-play mode
-        autoPlay = !autoPlay;
-        console.log('Auto-play mode:', autoPlay ? 'ON' : 'OFF');
+        toggleAutoPlay();
+    }
+}
+
+// Update control text based on device and auto-play state
+function updateControlText() {
+    const controlText = document.getElementById('controlText');
+    if (!controlText) return;
+    
+    const isMobile = window.innerWidth <= 768;
+    
+    if (autoPlay) {
+        controlText.textContent = 'Auto-play mode enabled! Press "s" to take control.';
+    } else if (isMobile) {
+        controlText.textContent = 'Use touch controls below to move and shoot - tap "s" for auto-play!';
+    } else {
+        controlText.textContent = 'Use arrow keys to move and spacebar to shoot - press "s" for auto-play!';
     }
 }
 
@@ -283,6 +535,9 @@ function gameLoop() {
         return;
     }
     
+    // Handle touch controls for mobile
+    handleTouchMovement();
+    
     autoPlayAI(); // Run AI if auto-play is enabled
     moveEnemies();
     dropEnemyBombs();
@@ -305,6 +560,20 @@ function gameLoop() {
     checkCollisions();
     
     requestAnimationFrame(gameLoop);
+}
+
+// Handle touch movement in game loop
+function handleTouchMovement() {
+    if (!window.touchControls || autoPlay) return;
+    
+    const moveSpeed = 8; // Slightly slower for touch for better control
+    
+    if (window.touchControls.left() && player.x > 0) {
+        player.x -= moveSpeed;
+    }
+    if (window.touchControls.right() && player.x < canvas.width - player.width) {
+        player.x += moveSpeed;
+    }
 }
 
 function drawPlayer() {
@@ -549,7 +818,7 @@ function drawHighScoreEntry() {
     ctx.fillText('SCORE: ' + score, centerX, centerY - 140);
     
     if (enteringName) {
-        // Show name input prompt
+        // Show name input prompt (only for desktop)
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 24px Courier New, monospace';
         ctx.fillText('ENTER YOUR NAME:', centerX, centerY - 80);
@@ -565,14 +834,29 @@ function drawHighScoreEntry() {
         ctx.font = '16px Courier New, monospace';
         ctx.fillText('(Press ENTER when done, max 10 characters)', centerX, centerY + 10);
     } else {
+        // Show mobile-friendly message if on mobile
+        if (isMobileDevice() && !autoPlay) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 20px Courier New, monospace';
+            ctx.fillText('Added as "PLAYER"', centerX, centerY - 80);
+            
+            ctx.fillStyle = '#AAAAAA';
+            ctx.font = '16px Courier New, monospace';
+            ctx.fillText('(Name auto-filled for mobile)', centerX, centerY - 50);
+        }
+        
         // Draw high scores table
         drawHighScores();
         
-        // Continue message (blinking)
+        // Continue message (blinking) - mobile-friendly
         if (gameOverDisplayTime % 60 < 40) {
             ctx.fillStyle = '#FFFFFF';
             ctx.font = '20px Courier New, monospace';
-            ctx.fillText('Press SPACE to Continue', centerX, canvas.height - 50);
+            if (isMobileDevice()) {
+                ctx.fillText('Tap anywhere to Continue', centerX, canvas.height - 50);
+            } else {
+                ctx.fillText('Press SPACE to Continue', centerX, canvas.height - 50);
+            }
         }
     }
     
@@ -619,11 +903,15 @@ function drawGameOver() {
     ctx.font = 'bold 28px Courier New, monospace';
     ctx.fillText('FINAL SCORE: ' + score, centerX, centerY + 40);
     
-    // Press R to restart message (blinking)
+    // Press R to restart message (blinking) - mobile-friendly
     if (gameOverDisplayTime % 60 < 40) {
         ctx.fillStyle = '#FFFFFF';
         ctx.font = '20px Courier New, monospace';
-        ctx.fillText('Press R to Restart', centerX, centerY + 80);
+        if (isMobileDevice()) {
+            ctx.fillText('Tap Anywhere to Restart', centerX, centerY + 80);
+        } else {
+            ctx.fillText('Press R to Restart', centerX, centerY + 80);
+        }
     }
     
     ctx.textAlign = 'left'; // Reset text align
@@ -909,13 +1197,21 @@ function loseLife() {
         isNewHighScore = isHighScore(score);
         
         if (isNewHighScore) {
-            // Add to high scores with temporary name
-            const tempName = autoPlay ? 'Claude' : 'Player';
-            checkAndAddHighScore(tempName, score);
+            // Determine name based on play mode and device
+            let playerName;
+            if (autoPlay) {
+                playerName = 'Claude';
+            } else if (isMobileDevice()) {
+                playerName = 'Player'; // Auto-fill for mobile users
+            } else {
+                playerName = 'Player'; // Temporary name for desktop (will allow editing)
+            }
+            
+            checkAndAddHighScore(playerName, score);
             showingHighScoreEntry = true;
             
-            // If not auto-play, allow name entry
-            if (!autoPlay) {
+            // Only allow name entry for desktop non-autoplay users
+            if (!autoPlay && !isMobileDevice()) {
                 enteringName = true;
                 currentNameInput = '';
             } else {
