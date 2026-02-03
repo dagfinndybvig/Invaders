@@ -2,7 +2,9 @@
 
 <b>The actual game is a Flask app in the subdirectory codespaces-flask-1!</b>
 
-[Play it on] (dagfinn.pythonanywhere.com/)
+[Link text](URL)
+
+Play it on ([dagfinn.pythonanywhere.com/](https://dagfinn.pythonanywhere.com/))
 
 Or go to /codespaces-flask-1 and start with
 
