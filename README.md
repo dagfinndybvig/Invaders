@@ -11,6 +11,26 @@ python app.py
 
 Open `http://127.0.0.1:5000` in your browser.
 
+## GitHub Spark-ready app
+
+This repo now includes a static Spark-friendly bundle in `spark-app\`:
+
+```text
+spark-app\
+├── index.html
+├── game.css
+└── js\
+```
+
+Run it locally as static content (no Flask required):
+
+```bash
+cd spark-app
+python -m http.server 4173
+```
+
+Then open `http://127.0.0.1:4173`.
+
 ## Gameplay and controls
 
 - Move: `←` / `→`
