@@ -17,11 +17,11 @@ def create_app() -> Flask:
 
     @app.get("/")
     def index():
-        return render_template("index.html", title="Home")
+        return render_template("index.html", title="Enhanced Invaders")
 
     @app.get("/space")
     def space():
-        return render_template("space.html", title="Space Invaders")
+        return render_template("space.html", title="Enhanced Invaders")
 
     return app
 

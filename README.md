@@ -2,6 +2,11 @@
 
 Classic-style Space Invaders built with Flask and HTML canvas.
 
+## Play online
+
+Play the latest live version here:  
+**https://dagfinndybvig.github.io/Invaders/**
+
 ## Run locally
 
 ```bash

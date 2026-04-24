@@ -2,6 +2,11 @@
 
 This folder contains the Space Invaders templates, static files, and a compatibility `app.py`.
 
+## Play online
+
+Live game URL:  
+**https://dagfinndybvig.github.io/Invaders/**
+
 The canonical way to run the project is from repository root:
 
 ```bash
