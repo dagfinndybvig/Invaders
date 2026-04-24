@@ -21,8 +21,12 @@ function normalizeScores(scores) {
     return normalized;
 }
 
-export function loadHighScores() {
-    const saved = localStorage.getItem(GAME_CONFIG.highScoreStorageKey);
+function buildStorageKey(mode = "manual") {
+    return `${GAME_CONFIG.highScoreStorageKey}:${mode}`;
+}
+
+export function loadHighScores(mode = "manual") {
+    const saved = localStorage.getItem(buildStorageKey(mode));
     if (!saved) {
         return DEFAULT_HIGH_SCORES.map((entry) => ({ ...entry }));
     }
@@ -35,8 +39,8 @@ export function loadHighScores() {
     return normalizeScores(parsed);
 }
 
-export function saveHighScores(scores) {
-    localStorage.setItem(GAME_CONFIG.highScoreStorageKey, JSON.stringify(scores));
+export function saveHighScores(scores, mode = "manual") {
+    localStorage.setItem(buildStorageKey(mode), JSON.stringify(scores));
 }
 
 export function isHighScore(scores, playerScore) {
@@ -44,12 +48,12 @@ export function isHighScore(scores, playerScore) {
         || playerScore > scores[scores.length - 1].score;
 }
 
-export function checkAndAddHighScore(scores, name, playerScore) {
+export function checkAndAddHighScore(scores, name, playerScore, mode = "manual") {
     if (!isHighScore(scores, playerScore)) {
         return { added: false, scores };
     }
 
     const updatedScores = normalizeScores([...scores, { name, score: playerScore }]);
-    saveHighScores(updatedScores);
+    saveHighScores(updatedScores, mode);
     return { added: true, scores: updatedScores };
 }

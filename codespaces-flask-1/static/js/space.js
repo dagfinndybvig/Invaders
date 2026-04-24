@@ -1,4 +1,3 @@
-// This file contains the JavaScript code that implements the Space Invaders game logic.
 import { GAME_CONFIG } from "./space-config.js";
 import { hapticFeedback, isMobileDevice } from "./space-device.js";
 import {
@@ -8,82 +7,86 @@ import {
     saveHighScores,
 } from "./space-storage.js";
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
 
 let player;
 let bullets = [];
 let enemies = [];
 let enemyBombs = [];
 let barriers = [];
+let powerups = [];
+let meteors = [];
+let particles = [];
 let saucer = null;
+let boss = null;
+
 let score = 0;
 let lives = 3;
+let round = 1;
 let gameOver = false;
-let enemyDirection = 1; // 1 for right, -1 for left
+let gameOverDisplayTime = 0;
+let showingHighScoreEntry = false;
+let enteringName = false;
+let currentNameInput = "";
+let highScores = [];
+let scoreMode = "manual";
+
+let enemyDirection = 1;
 let enemySpeed = GAME_CONFIG.baseEnemySpeed;
 let bombDropChance = GAME_CONFIG.baseBombDropChance;
-let autoPlay = false; // Auto-play feature toggle (start with OFF)
-let autoPlayShootTimer = 0; // Timer for auto-shooting
-let gameOverDisplayTime = 0; // Track frames since game over
-let round = 1; // Current round number
-let highScores = []; // High score table
-let showingHighScoreEntry = false; // Whether we're in high score entry mode
-let isNewHighScore = false; // Whether player achieved a new high score
-let enteringName = false; // Whether player is entering their name
-let currentNameInput = ''; // Current name being typed
-let shootCooldown = 0; // Cooldown timer for shooting
+let shootCooldown = 0;
+let autoPlay = false;
+let autoPlayShootTimer = 0;
+let autoFireEnabled = true;
+let touchMoveSpeed = GAME_CONFIG.touchMoveSpeed;
+let chargeFrames = 0;
+let isCharging = false;
+let fireBuffer = 0;
+let shakeFrames = 0;
+let shakeStrength = 0;
 
-// Audio context for sound effects
+let comboCount = 0;
+let comboTimer = 0;
+let shotsFired = 0;
+let shotsHit = 0;
+let tookDamageThisRound = false;
+let nearMissAwardedThisFrame = false;
+let scoreMultiplierFrames = 0;
+let manualControlFrames = 0;
+
+const inputState = {
+    left: false,
+    right: false,
+    fireHeld: false,
+};
+
+const playerPowerups = {
+    rapid: 0,
+    multi: 0,
+    spread: 0,
+    shield: 0,
+};
+
 let audioContext;
 
 function init() {
-    // Initialize responsive canvas
     resizeCanvas();
-    
     player = { x: canvas.width / 2 - 15, y: canvas.height - 30, width: 30, height: 30 };
-    createEnemies();
     createBarriers();
+    startRound();
     initAudio();
-    highScores = loadHighScores();
-    
-    // Setup input handlers
-    document.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('resize', resizeCanvas);
-    
-    // Add touch handler for mobile high score screen
-    canvas.addEventListener('touchend', handleCanvasTouch);
-    
-    // Setup mobile touch controls
+    highScores = loadHighScores(scoreMode);
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("resize", resizeCanvas);
+    canvas.addEventListener("touchend", handleCanvasTouch);
+
     setupTouchControls();
-    
-    // Auto-detect mobile and enable touch controls
     detectMobile();
-    
+    updateControlText();
     requestAnimationFrame(gameLoop);
-}
-
-// Mobile detection and responsive canvas sizing
-function detectMobile() {
-    const isMobile = isMobileDevice();
-
-    if (isMobile) {
-        // Show touch controls
-        const touchControls = document.getElementById('touchControls');
-        if (touchControls) {
-            touchControls.style.display = 'block';
-        }
-        
-        // Update control text for mobile
-        const controlText = document.getElementById('controlText');
-        if (controlText) {
-            controlText.textContent = 'Use touch controls below to move and shoot!';
-        }
-        
-        // Start with autoplay OFF on mobile (user can toggle)
-        autoPlay = false;
-        updateAutoplayButton();
-    }
 }
 
 function resizeCanvas() {
@@ -92,206 +95,191 @@ function resizeCanvas() {
     const maxWidth = Math.min(800, containerWidth - 20);
     const aspectRatio = 600 / 800;
     const newHeight = maxWidth * aspectRatio;
-    
-    // Update canvas display size
-    canvas.style.width = maxWidth + 'px';
-    canvas.style.height = newHeight + 'px';
-    
-    // Keep internal resolution for consistent game logic
-    // but scale the display
-    const scaleX = canvas.width / maxWidth;
-    const scaleY = canvas.height / newHeight;
-    
-    // Store scale for touch coordinate conversion
-    canvas.scaleX = scaleX;
-    canvas.scaleY = scaleY;
+
+    canvas.style.width = `${maxWidth}px`;
+    canvas.style.height = `${newHeight}px`;
+    canvas.scaleX = canvas.width / maxWidth;
+    canvas.scaleY = canvas.height / newHeight;
 }
 
-// Touch controls setup
-function setupTouchControls() {
-    const leftBtn = document.getElementById('leftBtn');
-    const rightBtn = document.getElementById('rightBtn');
-    const shootBtn = document.getElementById('shootBtn');
-    
-    if (!leftBtn || !rightBtn || !shootBtn) return;
-    
-    // Movement buttons
-    let leftPressed = false;
-    let rightPressed = false;
-    
-    // Left button
-    leftBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        leftPressed = true;
-        leftBtn.style.transform = 'scale(0.9)';
-        hapticFeedback();
-    });
-    
-    leftBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        leftPressed = false;
-        leftBtn.style.transform = 'scale(1)';
-    });
-    
-    // Right button
-    rightBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        rightPressed = true;
-        rightBtn.style.transform = 'scale(0.9)';
-        hapticFeedback();
-    });
-    
-    rightBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        rightPressed = false;
-        rightBtn.style.transform = 'scale(1)';
-    });
-    
-    // Shoot button
-    shootBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        shootBtn.style.transform = 'scale(0.9)';
-        if (!gameOver && shootCooldown <= 0) {
-            shoot();
-            hapticFeedback();
-        }
-    });
-    
-    shootBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        shootBtn.style.transform = 'scale(1)';
-    });
-    
-    // Store touch state for game loop
-    window.touchControls = {
-        left: () => leftPressed,
-        right: () => rightPressed
-    };
-    
-    // Prevent scrolling and zooming on touch controls
-    document.addEventListener('touchmove', (e) => {
-        if (e.target.classList.contains('touch-btn') || e.target.classList.contains('autoplay-btn')) {
-            e.preventDefault();
-        }
-    }, { passive: false });
-    
-    // Prevent double-tap zoom on touch controls
-    let lastTouchEnd = 0;
-    document.addEventListener('touchend', (e) => {
-        const now = (new Date()).getTime();
-        if (now - lastTouchEnd <= 300) {
-            e.preventDefault();
-        }
-        lastTouchEnd = now;
-    }, false);
-    
-    // Setup autoplay toggle button with delay to ensure DOM is ready
-    setTimeout(() => {
-        const autoplayBtn = document.getElementById('autoplayBtn');
-        if (autoplayBtn) {
-            // Use touchend for mobile and click for desktop
-            autoplayBtn.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleAutoPlay();
-                hapticFeedback();
-            });
-            
-            autoplayBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleAutoPlay();
-                hapticFeedback();
-            });
-            
-            // Prevent touchstart from interfering
-            autoplayBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            });
-        }
-    }, 100);
+function startRound() {
+    bullets = [];
+    enemyBombs = [];
+    powerups = [];
+    meteors = [];
+    particles = [];
+    saucer = null;
+    boss = null;
+    comboCount = 0;
+    comboTimer = 0;
+    tookDamageThisRound = false;
+    nearMissAwardedThisFrame = false;
+    player.x = canvas.width / 2 - player.width / 2;
+    enemyDirection = 1;
+    applyDifficultyDirector();
+
+    if (round % GAME_CONFIG.bossRoundInterval === 0) {
+        createBoss();
+    } else {
+        createEnemies();
+    }
 }
 
-// Toggle autoplay and update button
-function toggleAutoPlay() {
-    autoPlay = !autoPlay;
+function detectMobile() {
+    if (!isMobileDevice()) {
+        return;
+    }
+    const touchControls = document.getElementById("touchControls");
+    if (touchControls) {
+        touchControls.style.display = "block";
+    }
+    autoPlay = false;
     updateAutoplayButton();
-    updateControlText();
 }
 
-// Update autoplay button appearance
-function updateAutoplayButton() {
-    const autoplayBtn = document.getElementById('autoplayBtn');
+function setupTouchControls() {
+    const leftBtn = document.getElementById("leftBtn");
+    const rightBtn = document.getElementById("rightBtn");
+    const shootBtn = document.getElementById("shootBtn");
+    if (!leftBtn || !rightBtn || !shootBtn) return;
+
+    const setButtonState = (button, active) => {
+        button.style.transform = active ? "scale(0.9)" : "scale(1)";
+        button.style.opacity = active ? "0.9" : "1";
+    };
+
+    leftBtn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        inputState.left = true;
+        setButtonState(leftBtn, true);
+        hapticFeedback();
+    });
+    leftBtn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        inputState.left = false;
+        setButtonState(leftBtn, false);
+    });
+
+    rightBtn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        inputState.right = true;
+        setButtonState(rightBtn, true);
+        hapticFeedback();
+    });
+    rightBtn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        inputState.right = false;
+        setButtonState(rightBtn, false);
+    });
+
+    shootBtn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        inputState.fireHeld = true;
+        setButtonState(shootBtn, true);
+    });
+    shootBtn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        inputState.fireHeld = false;
+        setButtonState(shootBtn, false);
+    });
+
+    const autoplayBtn = document.getElementById("autoplayBtn");
     if (autoplayBtn) {
-        // Always show 'S', just change the visual state
-        autoplayBtn.textContent = 'S';
-        if (autoPlay) {
-            autoplayBtn.classList.add('active');
-        } else {
-            autoplayBtn.classList.remove('active');
-        }
+        autoplayBtn.addEventListener("touchend", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleAutoPlay();
+            hapticFeedback();
+        });
+        autoplayBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleAutoPlay();
+        });
     }
 }
 
 function initAudio() {
-    // Initialize audio context
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
 }
 
-function createShootSound() {
+function createShootSound(isChargeShot = false) {
     if (!audioContext) return;
-    
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    
-    // Create a laser-like sound
-    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.1);
-    
-    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-    
-    oscillator.type = 'square';
+
+    const startFrequency = isChargeShot ? 400 : 900 + Math.random() * 140;
+    const endFrequency = isChargeShot ? 1200 : 140;
+    const duration = isChargeShot ? 0.18 : 0.08;
+    oscillator.frequency.setValueAtTime(startFrequency, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(endFrequency, audioContext.currentTime + duration);
+    gainNode.gain.setValueAtTime(isChargeShot ? 0.14 : 0.08, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+    oscillator.type = isChargeShot ? "sawtooth" : "square";
     oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.1);
+    oscillator.stop(audioContext.currentTime + duration);
 }
 
 function createEnemies() {
-    for (let i = 0; i < 5; i++) {
-        for (let j = 0; j < 3; j++) {
-            enemies.push({ x: i * 50 + 30, y: j * 30 + 30, width: 40, height: 20 });
+    enemies = [];
+    const cols = 6;
+    const rows = 3 + Math.min(2, Math.floor(round / 3));
+    const xSpacing = 70;
+    const ySpacing = 44;
+
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const type = row === 0 ? "fast" : row === rows - 1 ? "tank" : "shooter";
+            const enemy = {
+                x: col * xSpacing + 90,
+                y: row * ySpacing + 50,
+                width: 38,
+                height: 22,
+                type,
+                hp: type === "tank" ? 3 : 1,
+                points: type === "fast" ? 15 : type === "shooter" ? 20 : 30,
+                dive: false,
+                diveDx: 0,
+                diveDy: 0,
+            };
+            enemies.push(enemy);
         }
     }
 }
 
+function createBoss() {
+    boss = {
+        x: canvas.width / 2 - 80,
+        y: 50,
+        width: 160,
+        height: 48,
+        hp: 70 + round * 6,
+        maxHp: 70 + round * 6,
+        dir: 1,
+        wave: 0,
+        bombCooldown: 0,
+    };
+}
+
 function createBarriers() {
-    const barrierWidth = 60;
-    const barrierHeight = 40;
+    barriers = [];
     const blockSize = 10;
     const barrierY = canvas.height - 150;
-    
-    // Create 4 barriers across the screen
+
     for (let b = 0; b < 4; b++) {
         const barrierX = 80 + b * 150;
         const barrier = [];
-        
-        // Create barrier shape (classic Space Invaders style)
         for (let row = 0; row < 4; row++) {
             for (let col = 0; col < 6; col++) {
-                // Skip blocks to create barrier shape with opening at bottom
-                if (row === 3 && (col === 2 || col === 3)) continue; // Bottom opening
-                if (row === 2 && (col === 2 || col === 3)) continue; // Bottom opening
-                
+                if ((row === 3 || row === 2) && (col === 2 || col === 3)) continue;
                 barrier.push({
                     x: barrierX + col * blockSize,
                     y: barrierY + row * blockSize,
                     width: blockSize,
                     height: blockSize,
-                    exists: true
+                    exists: true,
                 });
             }
         }
@@ -300,869 +288,1050 @@ function createBarriers() {
 }
 
 function spawnSaucer() {
-    if (!saucer && Math.random() < GAME_CONFIG.saucerSpawnChance) {
-        const direction = Math.random() < 0.5 ? 1 : -1; // Random direction
+    if (!saucer && !boss && Math.random() < GAME_CONFIG.saucerSpawnChance) {
+        const direction = Math.random() < 0.5 ? 1 : -1;
         saucer = {
             x: direction === 1 ? -50 : canvas.width + 50,
-            y: 10,
+            y: 14,
             width: 40,
             height: 15,
-            direction: direction,
-            points: Math.random() < 0.3 ? 300 : Math.random() < 0.6 ? 150 : 50 // Random point value
+            direction,
+            points: Math.random() < 0.25 ? 350 : Math.random() < 0.65 ? 200 : 80,
         };
     }
 }
 
 function moveSaucer() {
-    if (saucer) {
-        saucer.x += GAME_CONFIG.saucerSpeed * saucer.direction;
-        
-        // Remove saucer when it goes off screen
-        if (saucer.x < -60 || saucer.x > canvas.width + 60) {
-            saucer = null;
+    if (!saucer) return;
+    saucer.x += GAME_CONFIG.saucerSpeed * saucer.direction;
+    if (saucer.x < -60 || saucer.x > canvas.width + 60) {
+        saucer = null;
+    }
+}
+
+function spawnMeteorHazard() {
+    if (Math.random() > GAME_CONFIG.meteorSpawnChance + round * 0.00025) return;
+    meteors.push({
+        x: Math.random() * (canvas.width - 20) + 10,
+        y: -16,
+        radius: 8 + Math.random() * 8,
+        vx: (Math.random() - 0.5) * 1.2,
+        vy: 2 + Math.random() * 2,
+    });
+}
+
+function moveMeteors() {
+    for (let i = meteors.length - 1; i >= 0; i--) {
+        const meteor = meteors[i];
+        meteor.x += meteor.vx;
+        meteor.y += meteor.vy;
+        if (meteor.y > canvas.height + 25) {
+            meteors.splice(i, 1);
         }
     }
 }
 
-// Handle canvas touches for mobile high score navigation and game restart
+function spawnPowerup(x, y) {
+    if (Math.random() > GAME_CONFIG.powerupDropChance) return;
+    const types = ["rapid", "multi", "spread", "shield", "score"];
+    powerups.push({
+        x,
+        y,
+        width: 16,
+        height: 16,
+        vy: 1.8,
+        type: types[Math.floor(Math.random() * types.length)],
+    });
+}
+
+function updatePowerups() {
+    for (let i = powerups.length - 1; i >= 0; i--) {
+        const p = powerups[i];
+        p.y += p.vy;
+        if (p.y > canvas.height + 20) {
+            powerups.splice(i, 1);
+        }
+    }
+
+    Object.keys(playerPowerups).forEach((key) => {
+        if (playerPowerups[key] > 0) {
+            playerPowerups[key]--;
+        }
+    });
+    if (scoreMultiplierFrames > 0) scoreMultiplierFrames--;
+}
+
+function applyPowerup(type) {
+    if (type === "score") {
+        scoreMultiplierFrames = 60 * 10;
+        return;
+    }
+    if (type === "shield") {
+        playerPowerups.shield = 60 * 8;
+        return;
+    }
+    playerPowerups[type] = 60 * 10;
+}
+
+function addShake(strength, duration) {
+    shakeStrength = Math.max(shakeStrength, strength);
+    shakeFrames = Math.max(shakeFrames, duration);
+}
+
+function spawnHitParticles(x, y, color = "#ffd166", count = 8) {
+    for (let i = 0; i < count; i++) {
+        particles.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 3.6,
+            vy: (Math.random() - 0.5) * 3.6,
+            life: 16 + Math.random() * 18,
+            color,
+            size: 1 + Math.random() * 2,
+        });
+    }
+}
+
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.03;
+        p.life--;
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+        }
+    }
+}
+
 function handleCanvasTouch(event) {
     event.preventDefault();
-    
-    // Only handle touch if on mobile
-    if (isMobileDevice()) {
-        // Handle high score screen
-        if (showingHighScoreEntry && !enteringName) {
-            showingHighScoreEntry = false;
-        }
-        // Handle game over screen restart
-        else if (gameOver && !showingHighScoreEntry) {
-            restartGame();
-        }
+    if (!isMobileDevice()) return;
+    if (showingHighScoreEntry && !enteringName) {
+        showingHighScoreEntry = false;
+    } else if (gameOver && !showingHighScoreEntry) {
+        restartGame();
     }
 }
 
 function handleKeyDown(event) {
-    // Handle name input during high score entry
     if (enteringName) {
-        if (event.key === 'Enter') {
-            // Finish name entry
+        if (event.key === "Enter") {
             enteringName = false;
-            const finalName = currentNameInput.trim() || 'Player';
-            // Update the high score entry with the actual name
-            if (highScores.length > 0) {
-                // Find and update the temporary entry
-                for (let i = 0; i < highScores.length; i++) {
-                    if (highScores[i].score === score && highScores[i].name === 'Player') {
-                        highScores[i].name = finalName;
-                        saveHighScores(highScores);
-                        break;
-                    }
+            const finalName = currentNameInput.trim() || "Player";
+            for (let i = 0; i < highScores.length; i++) {
+                if (highScores[i].score === score && highScores[i].name === "Player") {
+                    highScores[i].name = finalName;
+                    saveHighScores(highScores, scoreMode);
+                    break;
                 }
             }
-            currentNameInput = '';
-        } else if (event.key === 'Backspace') {
+            currentNameInput = "";
+        } else if (event.key === "Backspace") {
             event.preventDefault();
             currentNameInput = currentNameInput.slice(0, -1);
         } else if (event.key.length === 1 && currentNameInput.length < GAME_CONFIG.desktopNameMaxLength) {
-            // Only allow alphanumeric and basic characters
-            if (/[a-zA-Z0-9 ]/.test(event.key)) {
-                currentNameInput += event.key;
-            }
+            if (/[a-zA-Z0-9 ]/.test(event.key)) currentNameInput += event.key;
         }
         return;
     }
-    
-    // Handle high score entry screen
-    if (showingHighScoreEntry && event.key === ' ' && !enteringName) {
+
+    if (showingHighScoreEntry && event.key === " ") {
         event.preventDefault();
         showingHighScoreEntry = false;
         return;
     }
-    
-    // Restart game if R is pressed after game over
-    if ((event.key === 'r' || event.key === 'R') && gameOver && !showingHighScoreEntry) {
+    if ((event.key === "r" || event.key === "R") && gameOver && !showingHighScoreEntry) {
         restartGame();
         return;
     }
-    
-    if (gameOver) return; // Don't process other keys if game is over
-    
-    // Keyboard movement (only if not auto-play)
-    if (event.key === 'ArrowLeft' && player.x > 0 && !autoPlay) {
-        player.x -= 15;
-    } else if (event.key === 'ArrowRight' && player.x < canvas.width - player.width && !autoPlay) {
-        player.x += 15;
-    } else if (event.key === ' ' && !autoPlay) {
-        event.preventDefault(); // Prevent page scroll
-        
-        // Resume audio context if needed (browser requirement)
-        if (audioContext && audioContext.state === 'suspended') {
-            audioContext.resume();
-        }
-        
-        shoot();
-    } else if (event.key === 's' || event.key === 'S') {
-        // Toggle auto-play mode
+    if (gameOver) return;
+
+    if (event.key === "ArrowLeft") inputState.left = true;
+    if (event.key === "ArrowRight") inputState.right = true;
+
+    if (event.key === " " && !autoPlay) {
+        event.preventDefault();
+        inputState.fireHeld = true;
+        fireBuffer = Math.min(4, fireBuffer + 1);
+    }
+    if (event.key === "c" || event.key === "C") {
+        isCharging = true;
+        chargeFrames = 0;
+    }
+    if (event.key === "s" || event.key === "S") {
         toggleAutoPlay();
+    }
+    if (event.key === "f" || event.key === "F") {
+        autoFireEnabled = !autoFireEnabled;
+        updateControlText();
+    }
+    if (event.key === "[" || event.key === "{") {
+        touchMoveSpeed = Math.max(4, touchMoveSpeed - 1);
+        updateControlText();
+    }
+    if (event.key === "]" || event.key === "}") {
+        touchMoveSpeed = Math.min(14, touchMoveSpeed + 1);
+        updateControlText();
     }
 }
 
-// Update control text based on device and auto-play state
-function updateControlText() {
-    const controlText = document.getElementById('controlText');
-    if (!controlText) return;
-    
-    const isMobile = window.innerWidth <= 768;
-    
-    if (autoPlay) {
-        controlText.textContent = 'Auto-play mode enabled! Press "s" to take control.';
-    } else if (isMobile) {
-        controlText.textContent = 'Use touch controls below to move and shoot - tap "s" for auto-play!';
-    } else {
-        controlText.textContent = 'Use arrow keys to move and spacebar to shoot - press "s" for auto-play!';
+function handleKeyUp(event) {
+    if (event.key === "ArrowLeft") inputState.left = false;
+    if (event.key === "ArrowRight") inputState.right = false;
+    if (event.key === " ") inputState.fireHeld = false;
+    if (event.key === "c" || event.key === "C") {
+        if (!gameOver && !autoPlay) {
+            releaseChargeShot();
+        }
+        isCharging = false;
+        chargeFrames = 0;
     }
+}
+
+function toggleAutoPlay() {
+    autoPlay = !autoPlay;
+    updateAutoplayButton();
+    updateControlText();
+}
+
+function updateAutoplayButton() {
+    const autoplayBtn = document.getElementById("autoplayBtn");
+    if (!autoplayBtn) return;
+    autoplayBtn.textContent = "S";
+    autoplayBtn.classList.toggle("active", autoPlay);
+}
+
+function updateControlText() {
+    const controlText = document.getElementById("controlText");
+    if (!controlText) return;
+    if (autoPlay) {
+        controlText.textContent = "Auto-play ON | press S to return | leaderboard: AUTO";
+        return;
+    }
+    controlText.textContent = `Arrows move, hold SPACE auto-fire, C charge-shot, F toggle auto-fire, [ ] touch sensitivity (${touchMoveSpeed})`;
 }
 
 function autoPlayAI() {
     if (!autoPlay) return;
-    
-    // Find the closest enemy or bomb threat
-    let closestThreat = null;
-    let closestDistance = Infinity;
-    
-    // Check for enemy bombs that might hit the player
-    enemyBombs.forEach(bomb => {
-        const distance = Math.abs(bomb.x + bomb.width/2 - (player.x + player.width/2));
-        if (bomb.y > player.y - 100 && distance < closestDistance) {
-            closestThreat = { x: bomb.x + bomb.width/2, type: 'bomb' };
-            closestDistance = distance;
-        }
-    });
-    
-    // If no immediate bomb threat, target enemies
-    if (!closestThreat) {
-        enemies.forEach(enemy => {
-            const distance = Math.abs(enemy.x + enemy.width/2 - (player.x + player.width/2));
-            if (distance < closestDistance) {
-                closestThreat = { x: enemy.x + enemy.width/2, type: 'enemy' };
-                closestDistance = distance;
-            }
-        });
-        
-        // Also consider saucer
-        if (saucer) {
-            const distance = Math.abs(saucer.x + saucer.width/2 - (player.x + player.width/2));
-            if (distance < closestDistance) {
-                closestThreat = { x: saucer.x + saucer.width/2, type: 'saucer' };
-                closestDistance = distance;
-            }
+    let targetX = player.x + player.width / 2;
+    let minDistance = Infinity;
+    for (const bomb of enemyBombs) {
+        const distance = Math.abs((bomb.x + bomb.width / 2) - (player.x + player.width / 2));
+        if (bomb.y > player.y - 120 && distance < minDistance) {
+            minDistance = distance;
+            targetX = distance < 32 ? player.x - (bomb.x > player.x ? 40 : -40) : bomb.x;
         }
     }
-    
-    if (closestThreat) {
-        const playerCenter = player.x + player.width/2;
-        const threatCenter = closestThreat.x;
-        
-        // Move towards the threat (for aiming) or away from bombs
-        if (closestThreat.type === 'bomb' && closestDistance < 30) {
-            // Dodge bombs by moving away (smoother movement)
-            if (threatCenter > playerCenter && player.x > 0) {
-                player.x -= 3;
-            } else if (threatCenter < playerCenter && player.x < canvas.width - player.width) {
-                player.x += 3;
-            }
-        } else {
-            // Aim at enemies/saucer (smoother movement)
-            if (threatCenter > playerCenter + 5 && player.x < canvas.width - player.width) {
-                player.x += 3;
-            } else if (threatCenter < playerCenter - 5 && player.x > 0) {
-                player.x -= 3;
-            }
-        }
+    if (minDistance === Infinity && boss) {
+        targetX = boss.x + boss.width / 2;
+    } else if (minDistance === Infinity && enemies.length > 0) {
+        const target = enemies.reduce((best, candidate) => (candidate.y > best.y ? candidate : best), enemies[0]);
+        targetX = target.x + target.width / 2;
     }
-    
-    // Auto-shoot at regular intervals
+    if (targetX > player.x + player.width / 2 + 5) player.x += 3;
+    if (targetX < player.x + player.width / 2 - 5) player.x -= 3;
     autoPlayShootTimer++;
-    if (autoPlayShootTimer >= 20) { // Shoot every 20 frames (about 3 times per second)
-        shoot();
+    if (autoPlayShootTimer >= 12) {
+        fireBuffer = Math.min(4, fireBuffer + 1);
         autoPlayShootTimer = 0;
     }
 }
 
 function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+    if (shakeFrames > 0) {
+        shakeFrames--;
+    } else {
+        shakeStrength = 0;
+    }
+    const dx = shakeFrames > 0 ? (Math.random() - 0.5) * shakeStrength : 0;
+    const dy = shakeFrames > 0 ? (Math.random() - 0.5) * shakeStrength : 0;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, dx, dy);
+    ctx.clearRect(-12, -12, canvas.width + 24, canvas.height + 24);
+
     if (gameOver) {
         gameOverDisplayTime++;
-        if (showingHighScoreEntry) {
-            drawHighScoreEntry();
-        } else {
-            drawGameOver();
-        }
+        if (showingHighScoreEntry) drawHighScoreEntry();
+        else drawGameOver();
+        ctx.restore();
         requestAnimationFrame(gameLoop);
         return;
     }
-    
-    // Handle touch controls for mobile
-    handleTouchMovement();
-    
-    autoPlayAI(); // Run AI if auto-play is enabled
+
+    nearMissAwardedThisFrame = false;
+    if (shootCooldown > 0) shootCooldown--;
+    if (comboTimer > 0) comboTimer--;
+    else comboCount = 0;
+    if (isCharging) chargeFrames = Math.min(GAME_CONFIG.maxChargeFrames, chargeFrames + 1);
+
+    handleMovementInput();
+    autoPlayAI();
+    handleShootingInput();
+
     moveEnemies();
+    moveBoss();
     dropEnemyBombs();
     moveEnemyBombs();
     spawnSaucer();
     moveSaucer();
-    
-    // Update shoot cooldown
-    if (shootCooldown > 0) {
-        shootCooldown--;
-    }
-    
+    spawnMeteorHazard();
+    moveMeteors();
+    updatePowerups();
+    updateParticles();
+    applyDifficultyDirector();
+
     drawPlayer();
     drawBullets();
     drawEnemies();
+    drawBoss();
     drawEnemyBombs();
     drawBarriers();
     drawSaucer();
+    drawPowerups();
+    drawMeteors();
+    drawParticles();
     drawScore();
     checkCollisions();
-    
+
+    ctx.restore();
     requestAnimationFrame(gameLoop);
 }
 
-// Handle touch movement in game loop
-function handleTouchMovement() {
-    if (!window.touchControls || autoPlay) return;
-    
-    const moveSpeed = 8; // Slightly slower for touch for better control
-    
-    if (window.touchControls.left() && player.x > 0) {
-        player.x -= moveSpeed;
+function handleMovementInput() {
+    const moveSpeed = touchMoveSpeed;
+    if (!autoPlay) {
+        if (inputState.left) {
+            player.x -= moveSpeed;
+            manualControlFrames++;
+        }
+        if (inputState.right) {
+            player.x += moveSpeed;
+            manualControlFrames++;
+        }
     }
-    if (window.touchControls.right() && player.x < canvas.width - player.width) {
-        player.x += moveSpeed;
+    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+}
+
+function handleShootingInput() {
+    if (autoPlay) return;
+    if (inputState.fireHeld && autoFireEnabled) {
+        fireBuffer = Math.min(4, fireBuffer + 1);
     }
+    if (fireBuffer > 0 && shootCooldown <= 0) {
+        shoot("normal");
+        fireBuffer--;
+    }
+}
+
+function releaseChargeShot() {
+    if (chargeFrames < 12) return;
+    if (shootCooldown > 0) return;
+    shoot("charge");
 }
 
 function drawPlayer() {
-    ctx.fillStyle = 'cyan';
-    
-    // Draw spaceship shape
     const centerX = player.x + player.width / 2;
     const bottomY = player.y + player.height;
-    
+
+    ctx.fillStyle = playerPowerups.shield > 0 ? "#7dd3fc" : "cyan";
     ctx.beginPath();
-    // Main body (triangle pointing up)
-    ctx.moveTo(centerX, player.y); // Top point
-    ctx.lineTo(player.x + 5, bottomY); // Bottom left
-    ctx.lineTo(player.x + player.width - 5, bottomY); // Bottom right
+    ctx.moveTo(centerX, player.y);
+    ctx.lineTo(player.x + 5, bottomY);
+    ctx.lineTo(player.x + player.width - 5, bottomY);
     ctx.closePath();
     ctx.fill();
-    
-    // Wings
-    ctx.fillStyle = 'lightblue';
-    ctx.fillRect(player.x, player.y + 15, 8, 10); // Left wing
-    ctx.fillRect(player.x + player.width - 8, player.y + 15, 8, 10); // Right wing
-    
-    // Engine glow
-    ctx.fillStyle = 'orange';
-    ctx.fillRect(player.x + 8, bottomY, 4, 3); // Left engine
-    ctx.fillRect(player.x + player.width - 12, bottomY, 4, 3); // Right engine
-    
-    // Cockpit
-    ctx.fillStyle = 'darkblue';
-    ctx.fillRect(centerX - 3, player.y + 8, 6, 8);
+
+    ctx.fillStyle = "lightblue";
+    ctx.fillRect(player.x, player.y + 15, 8, 10);
+    ctx.fillRect(player.x + player.width - 8, player.y + 15, 8, 10);
+
+    if (playerPowerups.shield > 0) {
+        ctx.strokeStyle = "rgba(125, 211, 252, 0.8)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(centerX, player.y + player.height / 2, 24, 0, Math.PI * 2);
+        ctx.stroke();
+    }
 }
 
 function drawBullets() {
-    ctx.fillStyle = 'red';
-    bullets.forEach((bullet, index) => {
-        bullet.y -= 5;
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
+        bullet.x += bullet.vx;
+        bullet.y += bullet.vy;
+        ctx.fillStyle = bullet.isCharge ? "#fca5a5" : "#ef4444";
         ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
-        if (bullet.y < 0) {
-            bullets.splice(index, 1);
+        if (bullet.y < -20 || bullet.x < -20 || bullet.x > canvas.width + 20) {
+            bullets.splice(i, 1);
         }
-    });
+    }
 }
 
 function drawEnemies() {
-    enemies.forEach((enemy) => {
-        drawMonster(enemy.x, enemy.y, enemy.width, enemy.height);
-    });
-}
-
-function drawEnemyBombs() {
-    ctx.fillStyle = 'yellow';
-    enemyBombs.forEach((bomb) => {
-        ctx.fillRect(bomb.x, bomb.y, bomb.width, bomb.height);
-    });
-}
-
-function drawBarriers() {
-    ctx.fillStyle = 'lime';
-    barriers.forEach(barrier => {
-        barrier.forEach(block => {
-            if (block.exists) {
-                ctx.fillRect(block.x, block.y, block.width, block.height);
-            }
-        });
-    });
-}
-
-function drawSaucer() {
-    if (saucer) {
-        // Draw saucer body
-        ctx.fillStyle = 'red';
-        ctx.fillRect(saucer.x + 5, saucer.y + 5, saucer.width - 10, saucer.height - 5);
-        
-        // Draw saucer dome
-        ctx.fillStyle = 'orange';
-        ctx.beginPath();
-        ctx.arc(saucer.x + saucer.width / 2, saucer.y + 8, 8, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Draw saucer lights
-        ctx.fillStyle = 'white';
-        for (let i = 0; i < 3; i++) {
+    for (const enemy of enemies) {
+        if (enemy.type === "tank") ctx.fillStyle = "#f97316";
+        else if (enemy.type === "shooter") ctx.fillStyle = "#facc15";
+        else ctx.fillStyle = "#fb7185";
+        ctx.fillRect(enemy.x + 4, enemy.y + 7, enemy.width - 8, enemy.height - 7);
+        ctx.fillStyle = "#111";
+        ctx.fillRect(enemy.x + 10, enemy.y + 8, 4, 4);
+        ctx.fillRect(enemy.x + enemy.width - 14, enemy.y + 8, 4, 4);
+        if (enemy.dive) {
+            ctx.strokeStyle = "rgba(255,255,255,0.4)";
             ctx.beginPath();
-            ctx.arc(saucer.x + 10 + i * 10, saucer.y + 12, 2, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.moveTo(enemy.x + enemy.width / 2, enemy.y + enemy.height);
+            ctx.lineTo(enemy.x + enemy.width / 2 - enemy.diveDx * 5, enemy.y + enemy.height + 15);
+            ctx.stroke();
         }
     }
 }
 
-function drawMonster(x, y, width, height) {
-    // Monster body
-    ctx.fillStyle = '#ff4444';
-    ctx.fillRect(x + 4, y + 8, width - 8, height - 8);
-    
-    // Monster head/top
-    ctx.fillStyle = '#ff6666';
-    ctx.beginPath();
-    ctx.arc(x + width/2, y + 6, 8, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Eyes
-    ctx.fillStyle = 'yellow';
-    ctx.beginPath();
-    ctx.arc(x + width/2 - 4, y + 4, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x + width/2 + 4, y + 4, 2, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Pupils
-    ctx.fillStyle = 'red';
-    ctx.beginPath();
-    ctx.arc(x + width/2 - 4, y + 4, 1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x + width/2 + 4, y + 4, 1, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Tentacles/legs
-    ctx.fillStyle = '#ff4444';
-    for (let i = 0; i < 4; i++) {
-        ctx.fillRect(x + 8 + i * 6, y + height - 4, 2, 6);
+function drawBoss() {
+    if (!boss) return;
+    ctx.fillStyle = "#a855f7";
+    ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+    ctx.fillStyle = "#f5d0fe";
+    ctx.fillRect(boss.x + 18, boss.y + 10, boss.width - 36, 18);
+
+    const hpRatio = Math.max(0, boss.hp / boss.maxHp);
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(200, 10, 400, 12);
+    ctx.fillStyle = hpRatio > 0.45 ? "#22c55e" : "#ef4444";
+    ctx.fillRect(200, 10, 400 * hpRatio, 12);
+}
+
+function drawEnemyBombs() {
+    ctx.fillStyle = "yellow";
+    for (const bomb of enemyBombs) {
+        ctx.fillRect(bomb.x, bomb.y, bomb.width, bomb.height);
     }
-    
-    // Monster mouth
-    ctx.fillStyle = 'black';
-    ctx.fillRect(x + width/2 - 3, y + 8, 6, 2);
-    
-    // Spikes on top
-    ctx.fillStyle = '#cc3333';
-    for (let i = 0; i < 3; i++) {
+}
+
+function drawBarriers() {
+    ctx.fillStyle = "lime";
+    for (const barrier of barriers) {
+        for (const block of barrier) {
+            if (block.exists) ctx.fillRect(block.x, block.y, block.width, block.height);
+        }
+    }
+}
+
+function drawSaucer() {
+    if (!saucer) return;
+    ctx.fillStyle = "red";
+    ctx.fillRect(saucer.x + 5, saucer.y + 5, saucer.width - 10, saucer.height - 5);
+    ctx.fillStyle = "orange";
+    ctx.beginPath();
+    ctx.arc(saucer.x + saucer.width / 2, saucer.y + 8, 8, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawPowerups() {
+    for (const p of powerups) {
+        if (p.type === "rapid") ctx.fillStyle = "#f59e0b";
+        else if (p.type === "multi") ctx.fillStyle = "#8b5cf6";
+        else if (p.type === "spread") ctx.fillStyle = "#0ea5e9";
+        else if (p.type === "shield") ctx.fillStyle = "#22d3ee";
+        else ctx.fillStyle = "#22c55e";
+        ctx.fillRect(p.x, p.y, p.width, p.height);
+    }
+}
+
+function drawMeteors() {
+    for (const meteor of meteors) {
+        ctx.fillStyle = "#94a3b8";
         ctx.beginPath();
-        ctx.moveTo(x + 10 + i * 8, y + 2);
-        ctx.lineTo(x + 12 + i * 8, y - 2);
-        ctx.lineTo(x + 14 + i * 8, y + 2);
-        ctx.closePath();
+        ctx.arc(meteor.x, meteor.y, meteor.radius, 0, Math.PI * 2);
         ctx.fill();
     }
+}
+
+function drawParticles() {
+    for (const p of particles) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = Math.max(0.1, p.life / 30);
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
 }
 
 function drawHighScores() {
     const centerX = canvas.width / 2;
     const startY = 200;
-    
-    // Title
-    ctx.shadowColor = '#FFD700';
-    ctx.shadowBlur = 15;
-    ctx.fillStyle = '#FFD700';
-    ctx.font = 'bold 36px Courier New, monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('HIGH SCORES', centerX, startY);
-    
-    ctx.shadowBlur = 0;
-    
-    // Draw border around high scores
-    ctx.strokeStyle = '#FFD700';
+    ctx.fillStyle = "#FFD700";
+    ctx.font = "bold 36px Courier New, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`HIGH SCORES (${scoreMode.toUpperCase()})`, centerX, startY);
+    ctx.strokeStyle = "#FFD700";
     ctx.lineWidth = 3;
-    ctx.strokeRect(centerX - 200, startY + 20, 400, 240);
-    
-    // Draw scores
-    ctx.font = 'bold 24px Courier New, monospace';
+    ctx.strokeRect(centerX - 220, startY + 20, 440, 240);
+    ctx.font = "bold 24px Courier New, monospace";
     highScores.forEach((entry, index) => {
         const y = startY + 60 + index * 45;
-        
-        // Rank number
-        ctx.fillStyle = '#FF6666';
-        ctx.textAlign = 'left';
-        ctx.fillText((index + 1) + '.', centerX - 180, y);
-        
-        // Name
-        ctx.fillStyle = '#00FF00';
-        ctx.fillText(entry.name.toUpperCase().substring(0, 10), centerX - 150, y);
-        
-        // Score
-        ctx.fillStyle = '#FFFF00';
-        ctx.textAlign = 'right';
-        ctx.fillText(entry.score.toString(), centerX + 180, y);
+        ctx.fillStyle = "#FF6666";
+        ctx.textAlign = "left";
+        ctx.fillText(`${index + 1}.`, centerX - 200, y);
+        ctx.fillStyle = "#00FF00";
+        ctx.fillText(entry.name.toUpperCase().substring(0, 10), centerX - 160, y);
+        ctx.fillStyle = "#FFFF00";
+        ctx.textAlign = "right";
+        ctx.fillText(entry.score.toString(), centerX + 200, y);
     });
-    
-    ctx.textAlign = 'left'; // Reset
+    ctx.textAlign = "left";
 }
 
 function drawHighScoreEntry() {
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
-    
-    // Draw semi-transparent background overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Congratulations message with glow
-    ctx.shadowColor = '#FFD700';
-    ctx.shadowBlur = 20;
-    ctx.fillStyle = '#FFD700';
-    ctx.font = 'bold 48px Courier New, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('NEW HIGH SCORE!', centerX, centerY - 200);
-    
-    ctx.shadowBlur = 0;
-    
-    // Display the score
-    ctx.fillStyle = '#00FF00';
-    ctx.font = 'bold 36px Courier New, monospace';
-    ctx.fillText('SCORE: ' + score, centerX, centerY - 140);
-    
+    ctx.fillStyle = "#FFD700";
+    ctx.font = "bold 44px Courier New, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("NEW HIGH SCORE!", centerX, centerY - 200);
+    ctx.fillStyle = "#00FF00";
+    ctx.font = "bold 30px Courier New, monospace";
+    ctx.fillText(`SCORE: ${score}`, centerX, centerY - 140);
+
     if (enteringName) {
-        // Show name input prompt (only for desktop)
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 24px Courier New, monospace';
-        ctx.fillText('ENTER YOUR NAME:', centerX, centerY - 80);
-        
-        // Show current input with cursor
-        ctx.fillStyle = '#FFFF00';
-        ctx.font = 'bold 32px Courier New, monospace';
-        const displayName = currentNameInput.toUpperCase() + (gameOverDisplayTime % 30 < 15 ? '_' : ' ');
-        ctx.fillText(displayName, centerX, centerY - 30);
-        
-        // Instructions
-        ctx.fillStyle = '#AAAAAA';
-        ctx.font = '16px Courier New, monospace';
-        ctx.fillText('(Press ENTER when done, max 10 characters)', centerX, centerY + 10);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "bold 24px Courier New, monospace";
+        ctx.fillText("ENTER YOUR NAME:", centerX, centerY - 80);
+        ctx.fillStyle = "#FFFF00";
+        ctx.font = "bold 32px Courier New, monospace";
+        const cursor = gameOverDisplayTime % 30 < 15 ? "_" : " ";
+        ctx.fillText(currentNameInput.toUpperCase() + cursor, centerX, centerY - 30);
     } else {
-        // Show mobile-friendly message if on mobile
-        if (isMobileDevice() && !autoPlay) {
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 20px Courier New, monospace';
-            ctx.fillText('Added as "PLAYER"', centerX, centerY - 80);
-            
-            ctx.fillStyle = '#AAAAAA';
-            ctx.font = '16px Courier New, monospace';
-            ctx.fillText('(Name auto-filled for mobile)', centerX, centerY - 50);
-        }
-        
-        // Draw high scores table
         drawHighScores();
-        
-        // Continue message (blinking) - mobile-friendly
         if (gameOverDisplayTime % 60 < 40) {
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '20px Courier New, monospace';
-            if (isMobileDevice()) {
-                ctx.fillText('Tap anywhere to Continue', centerX, canvas.height - 50);
-            } else {
-                ctx.fillText('Press SPACE to Continue', centerX, canvas.height - 50);
-            }
+            ctx.fillStyle = "#FFFFFF";
+            ctx.font = "20px Courier New, monospace";
+            ctx.fillText(isMobileDevice() ? "Tap anywhere to Continue" : "Press SPACE to Continue", centerX, canvas.height - 50);
         }
     }
-    
-    ctx.textAlign = 'left'; // Reset
-    ctx.textBaseline = 'alphabetic'; // Reset
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
 }
 
 function drawGameOver() {
-    // Arcade-style GAME OVER message
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
-    
-    // Draw semi-transparent background overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw retro border box
-    ctx.strokeStyle = '#FF0000';
+    ctx.strokeStyle = "#FF0000";
     ctx.lineWidth = 4;
-    ctx.strokeRect(centerX - 250, centerY - 100, 500, 200);
-    
-    ctx.strokeStyle = '#FFFF00';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(centerX - 245, centerY - 95, 490, 190);
-    
-    // Main GAME OVER text
-    // Outer glow
-    ctx.shadowColor = '#FF0000';
-    ctx.shadowBlur = 20;
-    ctx.fillStyle = '#FF0000';
-    ctx.font = 'bold 72px Courier New, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('GAME OVER', centerX, centerY - 20);
-    
-    // Inner text
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#FFFF00';
-    ctx.fillText('GAME OVER', centerX, centerY - 20);
-    
-    // Final score
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#00FF00';
-    ctx.font = 'bold 28px Courier New, monospace';
-    ctx.fillText('FINAL SCORE: ' + score, centerX, centerY + 40);
-    
-    // Press R to restart message (blinking) - mobile-friendly
+    ctx.strokeRect(centerX - 260, centerY - 110, 520, 220);
+    ctx.fillStyle = "#FFFF00";
+    ctx.font = "bold 66px Courier New, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("GAME OVER", centerX, centerY - 20);
+    ctx.fillStyle = "#00FF00";
+    ctx.font = "bold 26px Courier New, monospace";
+    ctx.fillText(`FINAL SCORE: ${score}`, centerX, centerY + 40);
+    ctx.fillText(`MODE: ${scoreMode.toUpperCase()}`, centerX, centerY + 72);
     if (gameOverDisplayTime % 60 < 40) {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '20px Courier New, monospace';
-        if (isMobileDevice()) {
-            ctx.fillText('Tap Anywhere to Restart', centerX, centerY + 80);
-        } else {
-            ctx.fillText('Press R to Restart', centerX, centerY + 80);
-        }
+        ctx.fillStyle = "#FFFFFF";
+        ctx.font = "20px Courier New, monospace";
+        ctx.fillText(isMobileDevice() ? "Tap Anywhere to Restart" : "Press R to Restart", centerX, centerY + 102);
     }
-    
-    ctx.textAlign = 'left'; // Reset text align
-    ctx.textBaseline = 'alphabetic'; // Reset baseline
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
 }
 
 function drawScore() {
-    ctx.fillStyle = 'white';
-    ctx.font = '20px Arial';
-    ctx.fillText('Score: ' + score, 10, 30);
-    
-    // Show level number
-    ctx.fillStyle = 'cyan';
-    ctx.font = '20px Arial';
-    ctx.fillText('Level: ' + round, 10, 55);
-    
-    // Show auto-play status
+    const accuracy = shotsFired > 0 ? Math.round((shotsHit / shotsFired) * 100) : 100;
+    const comboText = comboCount > 1 ? `x${comboCount}` : "x1";
+    const multiplier = scoreMultiplierFrames > 0 ? "2x" : "1x";
+    ctx.fillStyle = "white";
+    ctx.font = "18px Arial";
+    ctx.fillText(`Score: ${score}`, 10, 28);
+    ctx.fillStyle = "cyan";
+    ctx.fillText(`Level: ${round}`, 10, 50);
+    ctx.fillStyle = "#fde047";
+    ctx.fillText(`Combo: ${comboText}`, 10, 72);
+    ctx.fillStyle = "#a3e635";
+    ctx.fillText(`Acc: ${accuracy}%`, 10, 94);
+    ctx.fillStyle = "#c4b5fd";
+    ctx.fillText(`Score mult: ${multiplier}`, 10, 116);
     if (autoPlay) {
-        ctx.fillStyle = 'yellow';
-        ctx.font = '16px Arial';
-        ctx.fillText('AUTO-PLAY: ON', 10, 80);
+        ctx.fillStyle = "yellow";
+        ctx.fillText("AUTO-PLAY: ON", 10, 138);
     }
-    
-    // Draw lives display in upper right corner (simplified to just number)
-    const livesText = 'Lives: ' + lives;
-    const livesTextWidth = ctx.measureText(livesText).width;
-    const rightMargin = 30; // Increased from 10 to 30 to move it more to the left
-    const livesX = canvas.width - rightMargin - livesTextWidth;
-    
-    ctx.fillStyle = 'white';
-    ctx.font = '20px Arial';
-    ctx.fillText(livesText, livesX, 30);
+    const livesText = `Lives: ${lives}`;
+    const livesX = canvas.width - 34 - ctx.measureText(livesText).width;
+    ctx.fillStyle = "white";
+    ctx.fillText(livesText, livesX, 28);
+}
+
+function applyDifficultyDirector() {
+    const accuracy = shotsFired > 0 ? shotsHit / shotsFired : 0.8;
+    const performance = Math.max(0.75, Math.min(1.55, 0.9 + accuracy * 0.45 + comboCount * 0.02 - (3 - lives) * 0.15));
+    enemySpeed = GAME_CONFIG.baseEnemySpeed * (1 + (round - 1) * GAME_CONFIG.speedIncreasePerRound) * performance;
+    bombDropChance = GAME_CONFIG.baseBombDropChance * (1 + (round - 1) * GAME_CONFIG.speedIncreasePerRound) * performance;
 }
 
 function nextRound() {
-    // Increment round
+    if (!tookDamageThisRound) {
+        score += GAME_CONFIG.noHitRoundBonusBase + round * 30;
+    }
     round++;
-    
-    // Increase enemy speed by the speed multiplier
-    enemySpeed = GAME_CONFIG.baseEnemySpeed * (1 + (round - 1) * GAME_CONFIG.speedIncreasePerRound);
-    
-    // Increase bomb drop rate by the same factor
-    bombDropChance = GAME_CONFIG.baseBombDropChance * (1 + (round - 1) * GAME_CONFIG.speedIncreasePerRound);
-    
-    // Clear bullets and bombs
-    bullets = [];
-    enemyBombs = [];
-    saucer = null;
-    
-    // Reset enemy direction
-    enemyDirection = 1;
-    
-    // Reset player position
-    player.x = canvas.width / 2 - 15;
-    
-    // Create new enemies and barriers
-    createEnemies();
     createBarriers();
-    
-    // Score and lives persist between rounds
+    startRound();
 }
 
 function restartGame() {
-    // Reset all game variables
     bullets = [];
     enemies = [];
     enemyBombs = [];
     barriers = [];
+    powerups = [];
+    meteors = [];
+    particles = [];
     saucer = null;
+    boss = null;
     score = 0;
     lives = 3;
+    round = 1;
     gameOver = false;
     gameOverDisplayTime = 0;
-    enemyDirection = 1;
-    autoPlayShootTimer = 0;
-    round = 1;
-    enemySpeed = GAME_CONFIG.baseEnemySpeed;
-    bombDropChance = GAME_CONFIG.baseBombDropChance;
     showingHighScoreEntry = false;
-    isNewHighScore = false;
-    shootCooldown = 0;
     enteringName = false;
-    currentNameInput = '';
-    
-    // Reinitialize game elements
+    currentNameInput = "";
+    scoreMode = "manual";
+    shotsFired = 0;
+    shotsHit = 0;
+    manualControlFrames = 0;
+    scoreMultiplierFrames = 0;
+    fireBuffer = 0;
+    isCharging = false;
+    chargeFrames = 0;
+    Object.keys(playerPowerups).forEach((key) => {
+        playerPowerups[key] = 0;
+    });
     player = { x: canvas.width / 2 - 15, y: canvas.height - 30, width: 30, height: 30 };
-    createEnemies();
     createBarriers();
-    
-    // Game loop will continue automatically, no need to call requestAnimationFrame again
+    startRound();
+    highScores = loadHighScores(scoreMode);
+}
+
+function hitEnemy(enemy, bulletDamage) {
+    enemy.hp -= bulletDamage;
+    if (enemy.hp > 0) {
+        spawnHitParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#fca5a5", 4);
+        return false;
+    }
+    const comboMultiplier = Math.min(6, 1 + comboCount * 0.25);
+    const scoreMultiplier = scoreMultiplierFrames > 0 ? 2 : 1;
+    score += Math.round(enemy.points * comboMultiplier * scoreMultiplier);
+    comboCount++;
+    comboTimer = GAME_CONFIG.comboTimeoutFrames;
+    shotsHit++;
+    spawnHitParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#fde68a", 10);
+    addShake(6, 7);
+    spawnPowerup(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+    return true;
 }
 
 function checkCollisions() {
-    // Player bullets hitting enemies
     for (let bulletIndex = bullets.length - 1; bulletIndex >= 0; bulletIndex--) {
         const bullet = bullets[bulletIndex];
+        let consumed = false;
+
         for (let enemyIndex = enemies.length - 1; enemyIndex >= 0; enemyIndex--) {
             const enemy = enemies[enemyIndex];
-            if (bullet.x < enemy.x + enemy.width &&
-                bullet.x + bullet.width > enemy.x &&
-                bullet.y < enemy.y + enemy.height &&
-                bullet.y + bullet.height > enemy.y) {
-                bullets.splice(bulletIndex, 1);
-                enemies.splice(enemyIndex, 1);
-                score += 10;
-                break; // Exit enemy loop since bullet is destroyed
+            if (
+                bullet.x < enemy.x + enemy.width
+                && bullet.x + bullet.width > enemy.x
+                && bullet.y < enemy.y + enemy.height
+                && bullet.y + bullet.height > enemy.y
+            ) {
+                const defeated = hitEnemy(enemy, bullet.damage);
+                if (defeated) enemies.splice(enemyIndex, 1);
+                if (!bullet.pierce) {
+                    bullets.splice(bulletIndex, 1);
+                    consumed = true;
+                }
+                break;
+            }
+        }
+        if (consumed) continue;
+
+        if (boss
+            && bullet.x < boss.x + boss.width
+            && bullet.x + bullet.width > boss.x
+            && bullet.y < boss.y + boss.height
+            && bullet.y + bullet.height > boss.y) {
+            boss.hp -= bullet.damage;
+            shotsHit++;
+            spawnHitParticles(boss.x + boss.width / 2, boss.y + boss.height / 2, "#c4b5fd", 8);
+            if (!bullet.pierce) bullets.splice(bulletIndex, 1);
+            if (boss.hp <= 0) {
+                score += 1200 + round * 60;
+                spawnPowerup(boss.x + boss.width / 2, boss.y + boss.height / 2);
+                boss = null;
+                nextRound();
+                return;
             }
         }
     }
 
-    // Player bullets hitting saucer
     if (saucer) {
         for (let bulletIndex = bullets.length - 1; bulletIndex >= 0; bulletIndex--) {
             const bullet = bullets[bulletIndex];
-            if (bullet.x < saucer.x + saucer.width &&
-                bullet.x + bullet.width > saucer.x &&
-                bullet.y < saucer.y + saucer.height &&
-                bullet.y + bullet.height > saucer.y) {
-                bullets.splice(bulletIndex, 1);
+            if (
+                bullet.x < saucer.x + saucer.width
+                && bullet.x + bullet.width > saucer.x
+                && bullet.y < saucer.y + saucer.height
+                && bullet.y + bullet.height > saucer.y
+            ) {
                 score += saucer.points;
-                saucer = null; // Remove saucer
-                break; // Exit loop since bullet is destroyed
+                shotsHit++;
+                spawnHitParticles(saucer.x + saucer.width / 2, saucer.y + saucer.height / 2, "#fca5a5", 12);
+                bullets.splice(bulletIndex, 1);
+                saucer = null;
+                break;
             }
         }
     }
 
-    // Player bullets hitting barriers
     for (let bulletIndex = bullets.length - 1; bulletIndex >= 0; bulletIndex--) {
         const bullet = bullets[bulletIndex];
         let bulletDestroyed = false;
-        
-        barriers.forEach(barrier => {
-            if (bulletDestroyed) return;
-            
-            barrier.forEach(block => {
-                if (bulletDestroyed) return;
-                
-                if (block.exists &&
-                    bullet.x < block.x + block.width &&
-                    bullet.x + bullet.width > block.x &&
-                    bullet.y < block.y + block.height &&
-                    bullet.y + bullet.height > block.y) {
-                    bullets.splice(bulletIndex, 1);
-                    block.exists = false; // Destroy barrier block
+
+        for (const barrier of barriers) {
+            if (bulletDestroyed) break;
+            for (const block of barrier) {
+                if (!block.exists) continue;
+                if (
+                    bullet.x < block.x + block.width
+                    && bullet.x + bullet.width > block.x
+                    && bullet.y < block.y + block.height
+                    && bullet.y + bullet.height > block.y
+                ) {
+                    block.exists = false;
+                    if (!bullet.pierce) bullets.splice(bulletIndex, 1);
                     bulletDestroyed = true;
-                    
-                    // Destroy adjacent blocks for more realistic erosion
-                    barrier.forEach(adjacentBlock => {
-                        if (adjacentBlock.exists &&
-                            Math.abs(adjacentBlock.x - block.x) <= 10 &&
-                            Math.abs(adjacentBlock.y - block.y) <= 10 &&
-                            Math.random() < 0.3) {
-                            adjacentBlock.exists = false;
-                        }
-                    });
+                    break;
                 }
-            });
-        });
+            }
+        }
     }
 
-    // Enemy bombs hitting barriers
     for (let bombIndex = enemyBombs.length - 1; bombIndex >= 0; bombIndex--) {
         const bomb = enemyBombs[bombIndex];
         let bombDestroyed = false;
-        
-        barriers.forEach(barrier => {
-            if (bombDestroyed) return;
-            
-            barrier.forEach(block => {
-                if (bombDestroyed) return;
-                
-                if (block.exists &&
-                    bomb.x < block.x + block.width &&
-                    bomb.x + bomb.width > block.x &&
-                    bomb.y < block.y + block.height &&
-                    bomb.y + bomb.height > block.y) {
+
+        for (const barrier of barriers) {
+            if (bombDestroyed) break;
+            for (const block of barrier) {
+                if (!block.exists) continue;
+                if (
+                    bomb.x < block.x + block.width
+                    && bomb.x + bomb.width > block.x
+                    && bomb.y < block.y + block.height
+                    && bomb.y + bomb.height > block.y
+                ) {
+                    block.exists = false;
                     enemyBombs.splice(bombIndex, 1);
-                    block.exists = false; // Destroy barrier block
                     bombDestroyed = true;
-                    
-                    // Destroy adjacent blocks for more realistic erosion
-                    barrier.forEach(adjacentBlock => {
-                        if (adjacentBlock.exists &&
-                            Math.abs(adjacentBlock.x - block.x) <= 10 &&
-                            Math.abs(adjacentBlock.y - block.y) <= 10 &&
-                            Math.random() < 0.4) {
-                            adjacentBlock.exists = false;
-                        }
-                    });
+                    break;
                 }
-            });
+            }
+        }
+        if (bombDestroyed) continue;
+
+        if (
+            bomb.x < player.x + player.width
+            && bomb.x + bomb.width > player.x
+            && bomb.y < player.y + player.height
+            && bomb.y + bomb.height > player.y
+        ) {
+            enemyBombs.splice(bombIndex, 1);
+            loseLife();
+            break;
+        }
+    }
+
+    for (let i = powerups.length - 1; i >= 0; i--) {
+        const p = powerups[i];
+        if (
+            p.x < player.x + player.width
+            && p.x + p.width > player.x
+            && p.y < player.y + player.height
+            && p.y + p.height > player.y
+        ) {
+            applyPowerup(p.type);
+            spawnHitParticles(p.x, p.y, "#86efac", 10);
+            powerups.splice(i, 1);
+        }
+    }
+
+    for (let i = meteors.length - 1; i >= 0; i--) {
+        const meteor = meteors[i];
+        const meteorHitPlayer = Math.abs((player.x + player.width / 2) - meteor.x) < (meteor.radius + player.width / 2)
+            && Math.abs((player.y + player.height / 2) - meteor.y) < (meteor.radius + player.height / 2);
+        if (meteorHitPlayer) {
+            meteors.splice(i, 1);
+            loseLife();
+            continue;
+        }
+        for (const barrier of barriers) {
+            for (const block of barrier) {
+                if (!block.exists) continue;
+                if (Math.abs((block.x + block.width / 2) - meteor.x) < meteor.radius && Math.abs((block.y + block.height / 2) - meteor.y) < meteor.radius) {
+                    block.exists = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    for (const enemy of enemies) {
+        if (enemy.y + enemy.height >= player.y) {
+            loseLife();
+            break;
+        }
+    }
+
+    if (!boss && enemies.length === 0) nextRound();
+}
+
+function shoot(mode = "normal") {
+    if (shootCooldown > 0) return;
+    if (audioContext && audioContext.state === "suspended") audioContext.resume();
+
+    const isChargeShot = mode === "charge";
+    const chargeRatio = isChargeShot ? chargeFrames / GAME_CONFIG.maxChargeFrames : 0;
+    const chargeDamage = isChargeShot
+        ? Math.round(
+            GAME_CONFIG.chargeDamageMin
+            + (GAME_CONFIG.chargeDamageMax - GAME_CONFIG.chargeDamageMin) * chargeRatio,
+        )
+        : 1;
+    const baseCooldown = playerPowerups.rapid > 0 ? 7 : GAME_CONFIG.shootCooldownFrames;
+    shootCooldown = Math.max(4, baseCooldown - Math.floor(chargeDamage / 2));
+
+    const bulletSpeed = isChargeShot ? -8 : -6;
+    const bulletWidth = isChargeShot ? 6 : 4;
+    const bulletHeight = isChargeShot ? 16 : 10;
+    const centerX = player.x + player.width / 2 - bulletWidth / 2;
+    const bulletsToCreate = [];
+
+    bulletsToCreate.push({
+        x: centerX,
+        y: player.y,
+        width: bulletWidth,
+        height: bulletHeight,
+        vx: 0,
+        vy: bulletSpeed,
+        damage: chargeDamage,
+        pierce: isChargeShot,
+        isCharge: isChargeShot,
+    });
+
+    if (playerPowerups.multi > 0) {
+        bulletsToCreate.push({
+            x: centerX - 10,
+            y: player.y + 2,
+            width: 4,
+            height: 10,
+            vx: 0,
+            vy: bulletSpeed,
+            damage: 1,
+            pierce: false,
+            isCharge: false,
+        });
+        bulletsToCreate.push({
+            x: centerX + 10,
+            y: player.y + 2,
+            width: 4,
+            height: 10,
+            vx: 0,
+            vy: bulletSpeed,
+            damage: 1,
+            pierce: false,
+            isCharge: false,
+        });
+    }
+    if (playerPowerups.spread > 0) {
+        bulletsToCreate.push({
+            x: centerX,
+            y: player.y + 2,
+            width: 4,
+            height: 10,
+            vx: -1.8,
+            vy: bulletSpeed + 0.5,
+            damage: 1,
+            pierce: false,
+            isCharge: false,
+        });
+        bulletsToCreate.push({
+            x: centerX,
+            y: player.y + 2,
+            width: 4,
+            height: 10,
+            vx: 1.8,
+            vy: bulletSpeed + 0.5,
+            damage: 1,
+            pierce: false,
+            isCharge: false,
         });
     }
 
-    // Enemy bombs hitting player
-    for (let bombIndex = enemyBombs.length - 1; bombIndex >= 0; bombIndex--) {
-        const bomb = enemyBombs[bombIndex];
-        if (bomb.x < player.x + player.width &&
-            bomb.x + bomb.width > player.x &&
-            bomb.y < player.y + player.height &&
-            bomb.y + bomb.height > player.y) {
-            enemyBombs.splice(bombIndex, 1); // Remove the bomb that hit
-            loseLife();
-            break; // Exit loop since player was hit
-        }
-    }
-
-    // Check if enemies reached the player
-    enemies.forEach(enemy => {
-        if (enemy.y + enemy.height >= player.y) {
-            loseLife();
-        }
-    });
-
-    if (enemies.length === 0) {
-        // Start next round instead of ending game
-        nextRound();
-    }
-}
-
-function shoot() {
-    // Check cooldown
-    if (shootCooldown > 0) return;
-    
-    bullets.push({ x: player.x + player.width / 2 - 2, y: player.y, width: 4, height: 10 });
-    createShootSound(); // Play sound effect
-    shootCooldown = GAME_CONFIG.shootCooldownFrames; // Reset cooldown
+    bullets.push(...bulletsToCreate);
+    shotsFired += bulletsToCreate.length;
+    createShootSound(isChargeShot);
 }
 
 function moveEnemies() {
+    if (enemies.length === 0) return;
     let hitEdge = false;
-    
-    // Check if any enemy hits the edge
-    enemies.forEach(enemy => {
-        if ((enemy.x <= 0 && enemyDirection === -1) || 
-            (enemy.x + enemy.width >= canvas.width && enemyDirection === 1)) {
+    for (const enemy of enemies) {
+        if (!enemy.dive && ((enemy.x <= 0 && enemyDirection === -1) || (enemy.x + enemy.width >= canvas.width && enemyDirection === 1))) {
             hitEdge = true;
         }
-    });
-    
-    // If hit edge, change direction and move down
+    }
+
     if (hitEdge) {
         enemyDirection *= -1;
-        enemies.forEach(enemy => {
-            enemy.y += 20; // Move down
-        });
+        for (const enemy of enemies) {
+            if (!enemy.dive) enemy.y += 18;
+        }
     } else {
-        // Move horizontally
-        enemies.forEach(enemy => {
-            enemy.x += enemySpeed * enemyDirection;
-        });
+        for (const enemy of enemies) {
+            if (!enemy.dive) enemy.x += enemySpeed * enemyDirection;
+        }
+    }
+
+    for (const enemy of enemies) {
+        if (enemy.dive) {
+            enemy.x += enemy.diveDx;
+            enemy.y += enemy.diveDy;
+            if (enemy.y > canvas.height + 30 || enemy.x < -30 || enemy.x > canvas.width + 30) {
+                enemy.dive = false;
+                enemy.x = Math.min(canvas.width - enemy.width - 4, Math.max(4, enemy.x % canvas.width));
+                enemy.y = 30;
+            }
+        } else if (Math.random() < GAME_CONFIG.diveAttackChance + round * 0.0002 && enemy.type !== "tank") {
+            enemy.dive = true;
+            enemy.diveDx = (player.x + player.width / 2 < enemy.x ? -1 : 1) * (1.4 + Math.random() * 1.2);
+            enemy.diveDy = 1.5 + Math.random() * 1.6;
+        }
+    }
+}
+
+function moveBoss() {
+    if (!boss) return;
+    boss.wave += 0.03;
+    boss.x += boss.dir * (2 + round * 0.1);
+    boss.y = 45 + Math.sin(boss.wave) * 12;
+    if (boss.x <= 10 || boss.x + boss.width >= canvas.width - 10) {
+        boss.dir *= -1;
     }
 }
 
 function dropEnemyBombs() {
-    enemies.forEach(enemy => {
-        if (Math.random() < bombDropChance) {
+    if (boss) {
+        boss.bombCooldown--;
+        if (boss.bombCooldown <= 0) {
+            enemyBombs.push({
+                x: boss.x + boss.width / 2 - 3,
+                y: boss.y + boss.height,
+                width: 6,
+                height: 12,
+                vy: 4.4,
+            });
+            enemyBombs.push({
+                x: boss.x + 26,
+                y: boss.y + boss.height,
+                width: 5,
+                height: 10,
+                vy: 3.6,
+            });
+            enemyBombs.push({
+                x: boss.x + boss.width - 31,
+                y: boss.y + boss.height,
+                width: 5,
+                height: 10,
+                vy: 3.6,
+            });
+            boss.bombCooldown = Math.max(20, 64 - round * 2);
+        }
+        return;
+    }
+
+    for (const enemy of enemies) {
+        const typeFactor = enemy.type === "shooter" ? 1.8 : enemy.type === "fast" ? 1.1 : 0.8;
+        if (Math.random() < bombDropChance * typeFactor) {
             enemyBombs.push({
                 x: enemy.x + enemy.width / 2 - 2,
                 y: enemy.y + enemy.height,
                 width: 4,
-                height: 8
+                height: 8,
+                vy: 3 + (enemy.type === "fast" ? 0.7 : 0),
             });
         }
-    });
+    }
 }
 
 function moveEnemyBombs() {
-    enemyBombs.forEach((bomb, index) => {
-        bomb.y += 3; // Move bomb down
-        if (bomb.y > canvas.height) {
-            enemyBombs.splice(index, 1); // Remove bomb if it goes off screen
+    for (let index = enemyBombs.length - 1; index >= 0; index--) {
+        const bomb = enemyBombs[index];
+        bomb.y += bomb.vy || 3;
+        const playerCenter = player.x + player.width / 2;
+        const bombCenter = bomb.x + bomb.width / 2;
+        const distance = Math.abs(playerCenter - bombCenter);
+        const verticalGap = Math.abs(player.y - bomb.y);
+        if (!nearMissAwardedThisFrame && distance < GAME_CONFIG.nearMissDistance && verticalGap < 20) {
+            score += GAME_CONFIG.nearMissBonus;
+            nearMissAwardedThisFrame = true;
+            spawnHitParticles(playerCenter, player.y, "#67e8f9", 5);
         }
-    });
+        if (bomb.y > canvas.height + 10) {
+            enemyBombs.splice(index, 1);
+        }
+    }
 }
 
 function loseLife() {
+    if (playerPowerups.shield > 0) {
+        playerPowerups.shield = 0;
+        addShake(6, 8);
+        return;
+    }
+
+    tookDamageThisRound = true;
+    comboCount = 0;
+    comboTimer = 0;
     lives--;
-    
+    addShake(10, 12);
+    spawnHitParticles(player.x + player.width / 2, player.y + player.height / 2, "#f87171", 14);
+
     if (lives <= 0) {
         gameOver = true;
-        // Check if it's a new high score
-        isNewHighScore = isHighScore(highScores, score);
-        
-        if (isNewHighScore) {
-            // Determine name based on play mode and device
-            let playerName;
-            if (autoPlay) {
-                playerName = 'Claude';
-            } else if (isMobileDevice()) {
-                playerName = 'Player'; // Auto-fill for mobile users
-            } else {
-                playerName = 'Player'; // Temporary name for desktop (will allow editing)
-            }
-            
-            const highScoreResult = checkAndAddHighScore(highScores, playerName, score);
-            if (highScoreResult.added) {
-                highScores = highScoreResult.scores;
-            }
+        scoreMode = autoPlay && manualControlFrames < 150 ? "auto" : "manual";
+        highScores = loadHighScores(scoreMode);
+        const qualifies = isHighScore(highScores, score);
+        if (qualifies) {
+            let playerName = "Player";
+            if (scoreMode === "auto") playerName = "AI";
+            const result = checkAndAddHighScore(highScores, playerName, score, scoreMode);
+            if (result.added) highScores = result.scores;
             showingHighScoreEntry = true;
-            
-            // Only allow name entry for desktop non-autoplay users
-            if (!autoPlay && !isMobileDevice()) {
-                enteringName = true;
-                currentNameInput = '';
-            } else {
-                enteringName = false;
-            }
+            enteringName = scoreMode !== "auto" && !isMobileDevice();
+            currentNameInput = "";
         } else {
-            // No high score, go directly to game over
             showingHighScoreEntry = false;
             enteringName = false;
         }
-        // Game over message will be displayed on canvas
     } else {
-        // Reset player position and clear enemy bombs
         player.x = canvas.width / 2 - 15;
         enemyBombs = [];
-        
-        // Lives remaining is now shown only in the UI, no browser alert
     }
 }
 

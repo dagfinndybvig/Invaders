@@ -11,6 +11,26 @@ python app.py
 
 Open `http://127.0.0.1:5000` in your browser.
 
+## Gameplay and controls
+
+- Move: `←` / `→`
+- Fire: hold `SPACE` (auto-fire)
+- Charge shot: hold and release `C`
+- Toggle AI auto-play: `S`
+- Toggle manual auto-fire assist: `F`
+- Touch movement sensitivity: `[` and `]`
+- Restart after game over: `R` (or tap on mobile)
+
+## Gameplay systems
+
+- Enemy variants (`fast`, `shooter`, `tank`) with dive attacks
+- Boss fight every 5th round with dedicated HP bar
+- Dynamic difficulty scaling from round + player performance
+- Powerups: rapid fire, multi-shot, spread, shield, score multiplier
+- Hazard lanes with falling meteors
+- Scoring extras: combo chain, near-miss bonus, no-hit round bonus
+- Separate high-score tables for manual play and auto-play
+
 ## Project layout
 
 ```text
@@ -27,8 +47,8 @@ Open `http://127.0.0.1:5000` in your browser.
         ├── landing.css            # Landing-page styles
         ├── game.css               # Game-page styles
         └── js
-            ├── space.js           # Main game loop/render/collision logic
+            ├── space.js           # Gameplay systems, AI, hazards, boss, scoring
             ├── space-config.js    # Gameplay constants
             ├── space-device.js    # Mobile/haptics helpers
-            └── space-storage.js   # High-score persistence logic
+            └── space-storage.js   # Mode-specific high-score persistence
 ```
