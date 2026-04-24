@@ -11,46 +11,50 @@
 <body>
     <div class="container">
         <header>
-            <h1>Welcome to Dagfinn Dybvig</h1>
-            <p>Defend Earth from the alien invasion!</p>
+            <p class="kicker">RETRO ARCADE • MODERN UPGRADES</p>
+            <h1>Space Invaders: Neon Assault</h1>
+            <p>Classic alien waves, boss rounds, powerups, procedural music, and touch-friendly controls.</p>
+            <div class="feature-badges">
+                <span class="badge">Pixel-art invaders</span>
+                <span class="badge">Dynamic audio + SFX</span>
+                <span class="badge">Boss every 5 rounds</span>
+                <span class="badge">Slower start, smooth ramp</span>
+            </div>
         </header>
         
         <main>
             <!-- Space Invader Canvas -->
             <div class="space-invader-demo">
-                <h3>Space Invader Preview</h3>
+                <h3>Kill the invaders!</h3>
                 <canvas id="invaderCanvas" width="100" height="60"></canvas>
                 <br>
-                <a href="/space" class="play-button">Play Space Invaders!</a>
+                <a href="/space" class="play-button">Play Now</a>
+                <p class="small-note">Tip: enable audio in-game for the full retro vibe.</p>
             </div>
             
             <div class="instructions">
-                <h3>How to Play:</h3>
+                <h3>Quick Start</h3>
                 <ul>
-                    <li><strong>Desktop:</strong> Use ← → arrow keys to move</li>
-                    <li><strong>Desktop:</strong> Hold SPACEBAR for auto-fire, press C for charge shots</li>
+                    <li><strong>Move:</strong> Arrow keys (desktop) or touch controls (mobile)</li>
+                    <li><strong>Weapons:</strong> Hold SPACE for auto-fire, hold/release C for charge shot</li>
+                    <li><strong>Modes:</strong> Press S for auto-play, F to toggle manual auto-fire assist</li>
+                    <li><strong>Audio:</strong> Use Enable Audio, Mute, Music, and SFX controls in-game</li>
                     <li><strong>Mobile:</strong> Touch controls automatically appear</li>
-                    <li>Destroy all invaders to win!</li>
-                    <li>Don't let them reach you!</li>
-                    <li>Press "s" to toggle auto-play</li>
-                    <li>Power-ups: rapid fire, shield, spread, multi-shot, score multiplier</li>
-                    <li>Boss round every 5th level + meteor hazards</li>
-                    <li><strong>Mobile users:</strong> Game auto-enables touch controls</li>                    
+                    <li><strong>Powerups:</strong> Rapid fire, shield, spread, multi-shot, score boost</li>
+                    <li><strong>Threats:</strong> Dive attacks, meteor hazards, and boss fights every 5 rounds</li>
+                    <li><strong>Pacing:</strong> Slower opening rounds, then progressive difficulty ramp</li>
                 </ul>
             </div>
         </main>
     </div>
 
     <script>
-        // Simple space invader rendering
         const canvas = document.getElementById('invaderCanvas');
         const ctx = canvas.getContext('2d');
+        let frame = 0;
         
-        function drawSpaceInvader() {
-            ctx.fillStyle = '#00ff00';
-            
-            // Space invader pixel art pattern
-            const invader = [
+        const frames = [
+            [
                 [0,0,1,0,0,0,0,0,1,0,0],
                 [0,0,0,1,0,0,0,1,0,0,0],
                 [0,0,1,1,1,1,1,1,1,0,0],
@@ -59,11 +63,29 @@
                 [1,0,1,1,1,1,1,1,1,0,1],
                 [1,0,1,0,0,0,0,0,1,0,1],
                 [0,0,0,1,1,0,1,1,0,0,0]
-            ];
-            
+            ],
+            [
+                [0,0,1,0,0,0,0,0,1,0,0],
+                [1,0,0,1,0,0,0,1,0,0,1],
+                [1,0,1,1,1,1,1,1,1,0,1],
+                [1,1,1,0,1,1,1,0,1,1,1],
+                [1,1,1,1,1,1,1,1,1,1,1],
+                [0,0,1,1,1,1,1,1,1,0,0],
+                [0,1,1,0,0,0,0,0,1,1,0],
+                [1,0,0,1,0,0,0,1,0,0,1]
+            ]
+        ];
+
+        function drawSpaceInvader() {
+            if (!canvas || !ctx) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#67e8f9';
             const pixelSize = 4;
             const offsetX = 20;
             const offsetY = 10;
+            const invader = frames[Math.floor(frame / 24) % 2];
+            ctx.shadowColor = '#67e8f9';
+            ctx.shadowBlur = 6;
             
             for (let y = 0; y < invader.length; y++) {
                 for (let x = 0; x < invader[y].length; x++) {
@@ -77,10 +99,12 @@
                     }
                 }
             }
+            ctx.shadowBlur = 0;
+            frame++;
+            requestAnimationFrame(drawSpaceInvader);
         }
         
-        // Draw the space invader when page loads
-        window.addEventListener('load', drawSpaceInvader);
+        drawSpaceInvader();
     </script>
 </body>
 </html>
