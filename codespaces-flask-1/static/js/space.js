@@ -268,7 +268,8 @@ function setupTouchControls() {
 
     shootBtn.addEventListener("touchstart", (e) => {
         e.preventDefault();
-        inputState.fireHeld = true;
+        inputState.fireHeld = autoFireEnabled;
+        fireBuffer = autoFireEnabled ? Math.min(4, fireBuffer + 1) : 1;
         setButtonState(shootBtn, true);
     });
     shootBtn.addEventListener("touchend", (e) => {
@@ -700,7 +701,7 @@ function handleKeyDown(event) {
 
     if (event.key === " " && !autoPlay) {
         event.preventDefault();
-        inputState.fireHeld = true;
+        inputState.fireHeld = autoFireEnabled;
         if (!event.repeat) {
             fireBuffer = autoFireEnabled ? Math.min(4, fireBuffer + 1) : 1;
         }
@@ -714,6 +715,10 @@ function handleKeyDown(event) {
     }
     if ((event.key === "f" || event.key === "F") && !event.repeat) {
         autoFireEnabled = !autoFireEnabled;
+        fireBuffer = 0;
+        if (!autoFireEnabled) {
+            inputState.fireHeld = false;
+        }
         playTone({
             frequency: autoFireEnabled ? 760 : 420,
             duration: 0.08,
@@ -1159,6 +1164,8 @@ function drawScore() {
         ctx.fillStyle = "yellow";
         ctx.fillText("AUTO-PLAY: ON", 10, 138);
     }
+    ctx.fillStyle = autoFireEnabled ? "#34d399" : "#f87171";
+    ctx.fillText(`Auto-fire: ${autoFireEnabled ? "ON" : "OFF"}`, 10, autoPlay ? 160 : 138);
     const livesText = `Lives: ${lives}`;
     const livesX = canvas.width - 34 - ctx.measureText(livesText).width;
     ctx.fillStyle = "white";
