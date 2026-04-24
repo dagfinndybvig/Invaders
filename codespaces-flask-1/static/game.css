@@ -40,6 +40,41 @@ body {
     border-radius: 10px;
 }
 
+.audio-controls {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 8px 10px;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(0, 255, 136, 0.25);
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+
+.audio-btn {
+    background: rgba(0, 170, 255, 0.25);
+    border: 1px solid rgba(0, 170, 255, 0.7);
+    color: #e0f2fe;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.audio-btn:hover {
+    background: rgba(0, 170, 255, 0.4);
+}
+
+.audio-slider-label {
+    font-size: 0.85rem;
+    text-align: right;
+    color: #93c5fd;
+}
+
+.audio-slider {
+    width: 140px;
+}
+
 .touch-controls {
     display: none;
     position: fixed;
@@ -118,6 +153,10 @@ body {
     }
 
     .controls {
+        margin-bottom: 100px;
+    }
+
+    .audio-controls {
         margin-bottom: 100px;
     }
 }

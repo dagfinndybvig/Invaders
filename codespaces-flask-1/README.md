@@ -25,6 +25,7 @@ Both entrypoints load the same shared Flask app and serve the same routes:
 - Enemy classes with formation pressure and dive attacks
 - Boss rounds every 5 levels
 - Dynamic difficulty adjustments based on performance
+- Slower opening rounds and softer early vertical descent before ramp-up
 - Timed powerups: rapid, multi, spread, shield, score boost
 - Meteor hazards that pressure movement and barriers
 - Combo, near-miss, and no-hit scoring bonuses
@@ -39,3 +40,4 @@ Both entrypoints load the same shared Flask app and serve the same routes:
 - `F`: toggle manual auto-fire assist
 - `[` / `]`: touch movement sensitivity
 - `R`: restart on game-over
+- In-game audio panel: Enable Audio, Mute toggle, Music/SFX sliders

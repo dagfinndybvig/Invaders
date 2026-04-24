@@ -1,9 +1,9 @@
 export const GAME_CONFIG = Object.freeze({
-    baseEnemySpeed: 2,
-    baseBombDropChance: 0.001,
+    baseEnemySpeed: 1.85,
+    baseBombDropChance: 0.00075,
     saucerSpawnChance: 0.002,
     saucerSpeed: 2,
-    speedIncreasePerRound: 0.5,
+    speedIncreasePerRound: 0.22,
     shootCooldownFrames: 15,
     highScoreStorageKey: "spaceInvadersHighScores",
     maxHighScores: 5,
@@ -20,6 +20,11 @@ export const GAME_CONFIG = Object.freeze({
     maxChargeFrames: 80,
     chargeDamageMin: 2,
     chargeDamageMax: 6,
+    earlyRoundDropStep: 10,
+    lateRoundDropStep: 18,
+    earlyRoundDiveSpeedMin: 0.9,
+    earlyRoundDiveSpeedMax: 1.7,
+    lateRoundDiveSpeedMax: 3.2,
 });
 
 export const DEFAULT_HIGH_SCORES = Object.freeze(

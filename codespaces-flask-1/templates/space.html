@@ -15,6 +15,14 @@
         <div class="controls">
             <p id="controlText">Arrows move, hold SPACE auto-fire, C charge-shot, S toggle auto-play.</p>
         </div>
+        <div class="audio-controls" id="audioControls">
+            <button id="audioStartBtn" class="audio-btn">Enable Audio</button>
+            <button id="audioMuteBtn" class="audio-btn">Mute: Off</button>
+            <label class="audio-slider-label" for="musicVolume">Music</label>
+            <input id="musicVolume" class="audio-slider" type="range" min="0" max="100" value="38">
+            <label class="audio-slider-label" for="sfxVolume">SFX</label>
+            <input id="sfxVolume" class="audio-slider" type="range" min="0" max="100" value="72">
+        </div>
         
         <!-- Touch Controls for Mobile -->
         <div class="touch-controls" id="touchControls">

@@ -20,6 +20,7 @@ Open `http://127.0.0.1:5000` in your browser.
 - Toggle manual auto-fire assist: `F`
 - Touch movement sensitivity: `[` and `]`
 - Restart after game over: `R` (or tap on mobile)
+- Audio: use in-game buttons for Enable Audio, Mute, Music level, and SFX level
 
 ## Gameplay systems
 
@@ -30,6 +31,8 @@ Open `http://127.0.0.1:5000` in your browser.
 - Hazard lanes with falling meteors
 - Scoring extras: combo chain, near-miss bonus, no-hit round bonus
 - Separate high-score tables for manual play and auto-play
+- Procedural retro sound system: dynamic background loop + gameplay event SFX
+- Slower early-game pacing with progressive ramp (including gentler early vertical enemy descent)
 
 ## Project layout
 

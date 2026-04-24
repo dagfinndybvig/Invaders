@@ -70,6 +70,20 @@ const playerPowerups = {
 };
 
 let audioContext;
+let masterGain;
+let musicGain;
+let sfxGain;
+let musicNextStepAt = 0;
+let musicStepIndex = 0;
+let marchStepIndex = 0;
+let lastMarchTickFrame = 0;
+let audioEnabled = false;
+let audioMuted = false;
+let musicVolume = 0.38;
+let sfxVolume = 0.72;
+
+const MUSIC_PATTERN = [0, 4, 7, 9, 7, 4, 0, 2];
+const BASS_PATTERN = [0, -5, -7, -5, 0, -5, -7, -2];
 
 const INVADER_SPRITES = {
     fast: {
@@ -155,6 +169,7 @@ function init() {
     createBarriers();
     startRound();
     initAudio();
+    bindAudioControls();
     highScores = loadHighScores(scoreMode);
 
     document.addEventListener("keydown", handleKeyDown);
@@ -280,25 +295,171 @@ function setupTouchControls() {
 
 function initAudio() {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioContext.createGain();
+    musicGain = audioContext.createGain();
+    sfxGain = audioContext.createGain();
+    masterGain.gain.value = 0.9;
+    musicGain.gain.value = 0;
+    sfxGain.gain.value = 0;
+    musicGain.connect(masterGain);
+    sfxGain.connect(masterGain);
+    masterGain.connect(audioContext.destination);
+}
+
+function bindAudioControls() {
+    const startBtn = document.getElementById("audioStartBtn");
+    const muteBtn = document.getElementById("audioMuteBtn");
+    const musicSlider = document.getElementById("musicVolume");
+    const sfxSlider = document.getElementById("sfxVolume");
+    if (!startBtn || !muteBtn || !musicSlider || !sfxSlider) return;
+
+    startBtn.addEventListener("click", () => {
+        startAudio();
+    });
+
+    muteBtn.addEventListener("click", () => {
+        audioMuted = !audioMuted;
+        updateAudioGains();
+        muteBtn.textContent = `Mute: ${audioMuted ? "On" : "Off"}`;
+    });
+
+    musicSlider.addEventListener("input", (event) => {
+        musicVolume = Number(event.target.value) / 100;
+        updateAudioGains();
+    });
+
+    sfxSlider.addEventListener("input", (event) => {
+        sfxVolume = Number(event.target.value) / 100;
+        updateAudioGains();
+    });
+
+    const unlockAudio = () => {
+        if (!audioEnabled) startAudio();
+    };
+    document.addEventListener("keydown", unlockAudio, { once: true });
+    document.addEventListener("touchstart", unlockAudio, { once: true });
+    canvas.addEventListener("pointerdown", unlockAudio, { once: true });
+}
+
+function startAudio() {
+    if (!audioContext) return;
+    if (audioContext.state === "suspended") {
+        audioContext.resume();
+    }
+    audioEnabled = true;
+    const startBtn = document.getElementById("audioStartBtn");
+    if (startBtn) {
+        startBtn.textContent = "Audio Enabled";
+        startBtn.disabled = true;
+    }
+    musicNextStepAt = audioContext.currentTime;
+    updateAudioGains();
+}
+
+function updateAudioGains() {
+    if (!musicGain || !sfxGain) return;
+    const targetMusic = audioEnabled && !audioMuted ? musicVolume : 0;
+    const targetSfx = audioEnabled && !audioMuted ? sfxVolume : 0;
+    musicGain.gain.setTargetAtTime(targetMusic, audioContext.currentTime, 0.04);
+    sfxGain.gain.setTargetAtTime(targetSfx, audioContext.currentTime, 0.04);
+}
+
+function playTone({
+    frequency,
+    duration = 0.08,
+    type = "square",
+    gain = 0.08,
+    glideTo = null,
+    target = "sfx",
+}) {
+    if (!audioEnabled || !audioContext || audioMuted) return;
+    const osc = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    const out = target === "music" ? musicGain : sfxGain;
+    osc.type = type;
+    osc.frequency.setValueAtTime(Math.max(40, frequency), audioContext.currentTime);
+    if (glideTo) {
+        osc.frequency.exponentialRampToValueAtTime(Math.max(40, glideTo), audioContext.currentTime + duration);
+    }
+    gainNode.gain.setValueAtTime(gain, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+    osc.connect(gainNode);
+    gainNode.connect(out);
+    osc.start(audioContext.currentTime);
+    osc.stop(audioContext.currentTime + duration);
+}
+
+function midiToFreq(midi) {
+    return 440 * (2 ** ((midi - 69) / 12));
+}
+
+function updateMusicLoop() {
+    if (!audioEnabled || !audioContext || gameOver) return;
+    const now = audioContext.currentTime;
+    const tempoBpm = boss ? 156 : Math.min(146, 110 + round * 3);
+    const stepDuration = 60 / tempoBpm;
+    while (musicNextStepAt < now + 0.15) {
+        const leadMidi = 60 + MUSIC_PATTERN[musicStepIndex % MUSIC_PATTERN.length] + (boss ? 12 : 0);
+        const bassMidi = 45 + BASS_PATTERN[musicStepIndex % BASS_PATTERN.length];
+        playTone({
+            frequency: midiToFreq(leadMidi),
+            duration: stepDuration * 0.75,
+            gain: boss ? 0.05 : 0.04,
+            type: boss ? "sawtooth" : "square",
+            target: "music",
+        });
+        playTone({
+            frequency: midiToFreq(bassMidi),
+            duration: stepDuration * 0.88,
+            gain: 0.03,
+            type: "triangle",
+            target: "music",
+        });
+        musicStepIndex++;
+        musicNextStepAt += stepDuration;
+    }
+}
+
+function playEnemyMarchTick() {
+    const notes = [60, 58, 56, 53];
+    const midi = notes[marchStepIndex % notes.length] + Math.min(8, Math.floor(round / 2));
+    marchStepIndex++;
+    playTone({
+        frequency: midiToFreq(midi),
+        duration: 0.06,
+        gain: 0.06,
+        type: "square",
+    });
+}
+
+function createExplosionSound(isBig = false) {
+    playTone({
+        frequency: isBig ? 160 : 220,
+        glideTo: 48,
+        duration: isBig ? 0.24 : 0.15,
+        gain: isBig ? 0.12 : 0.08,
+        type: "sawtooth",
+    });
+}
+
+function createDamageSound() {
+    playTone({
+        frequency: 180,
+        glideTo: 70,
+        duration: 0.22,
+        gain: 0.11,
+        type: "triangle",
+    });
 }
 
 function createShootSound(isChargeShot = false) {
-    if (!audioContext) return;
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    const startFrequency = isChargeShot ? 400 : 900 + Math.random() * 140;
-    const endFrequency = isChargeShot ? 1200 : 140;
-    const duration = isChargeShot ? 0.18 : 0.08;
-    oscillator.frequency.setValueAtTime(startFrequency, audioContext.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(endFrequency, audioContext.currentTime + duration);
-    gainNode.gain.setValueAtTime(isChargeShot ? 0.14 : 0.08, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-    oscillator.type = isChargeShot ? "sawtooth" : "square";
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + duration);
+    playTone({
+        frequency: isChargeShot ? 400 : 900 + Math.random() * 140,
+        glideTo: isChargeShot ? 1200 : 140,
+        duration: isChargeShot ? 0.18 : 0.08,
+        gain: isChargeShot ? 0.14 : 0.08,
+        type: isChargeShot ? "sawtooth" : "square",
+    });
 }
 
 function createEnemies() {
@@ -441,6 +602,13 @@ function updatePowerups() {
 }
 
 function applyPowerup(type) {
+    playTone({
+        frequency: type === "shield" ? 520 : 680,
+        glideTo: 980,
+        duration: 0.12,
+        gain: 0.09,
+        type: "triangle",
+    });
     if (type === "score") {
         scoreMultiplierFrames = 60 * 10;
         return;
@@ -620,6 +788,7 @@ function autoPlayAI() {
 
 function gameLoop() {
     frameCount++;
+    updateMusicLoop();
     if (shakeFrames > 0) {
         shakeFrames--;
     } else {
@@ -986,19 +1155,38 @@ function drawScore() {
     const livesX = canvas.width - 34 - ctx.measureText(livesText).width;
     ctx.fillStyle = "white";
     ctx.fillText(livesText, livesX, 28);
+    ctx.fillStyle = "#93c5fd";
+    ctx.fillText(`Audio: ${audioEnabled ? (audioMuted ? "Muted" : "On") : "Off"}`, livesX - 90, 50);
 }
 
 function applyDifficultyDirector() {
     const accuracy = shotsFired > 0 ? shotsHit / shotsFired : 0.8;
-    const performance = Math.max(0.75, Math.min(1.55, 0.9 + accuracy * 0.45 + comboCount * 0.02 - (3 - lives) * 0.15));
-    enemySpeed = GAME_CONFIG.baseEnemySpeed * (1 + (round - 1) * GAME_CONFIG.speedIncreasePerRound) * performance;
-    bombDropChance = GAME_CONFIG.baseBombDropChance * (1 + (round - 1) * GAME_CONFIG.speedIncreasePerRound) * performance;
+    const performance = Math.max(0.8, Math.min(1.45, 0.88 + accuracy * 0.38 + comboCount * 0.02 - (3 - lives) * 0.13));
+    const bombPerformance = Math.max(0.85, Math.min(1.3, 0.92 + accuracy * 0.22 + comboCount * 0.012 - (3 - lives) * 0.1));
+
+    const earlySpeedCurve = round <= 3
+        ? 0.55 + (round - 1) * 0.15
+        : 0.85 + (round - 3) * GAME_CONFIG.speedIncreasePerRound;
+
+    const earlyBombCurve = round <= 3
+        ? 0.5 + (round - 1) * 0.12
+        : 0.74 + (round - 3) * (GAME_CONFIG.speedIncreasePerRound * 0.85);
+
+    enemySpeed = Math.max(0.95, GAME_CONFIG.baseEnemySpeed * earlySpeedCurve * performance);
+    bombDropChance = Math.max(0.00035, GAME_CONFIG.baseBombDropChance * earlyBombCurve * bombPerformance);
 }
 
 function nextRound() {
     if (!tookDamageThisRound) {
         score += GAME_CONFIG.noHitRoundBonusBase + round * 30;
     }
+    playTone({
+        frequency: midiToFreq(72),
+        glideTo: midiToFreq(79),
+        duration: 0.2,
+        gain: 0.1,
+        type: "triangle",
+    });
     round++;
     createBarriers();
     startRound();
@@ -1037,11 +1225,19 @@ function restartGame() {
     createBarriers();
     startRound();
     highScores = loadHighScores(scoreMode);
+    musicStepIndex = 0;
+    musicNextStepAt = audioContext ? audioContext.currentTime : 0;
 }
 
 function hitEnemy(enemy, bulletDamage) {
     enemy.hp -= bulletDamage;
     if (enemy.hp > 0) {
+        playTone({
+            frequency: enemy.type === "tank" ? 180 : 260,
+            duration: 0.05,
+            gain: 0.05,
+            type: "square",
+        });
         spawnHitParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#fca5a5", 4);
         return false;
     }
@@ -1051,6 +1247,7 @@ function hitEnemy(enemy, bulletDamage) {
     comboCount++;
     comboTimer = GAME_CONFIG.comboTimeoutFrames;
     shotsHit++;
+    createExplosionSound(enemy.type === "tank");
     spawnHitParticles(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, "#fde68a", 10);
     addShake(6, 7);
     spawnPowerup(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
@@ -1091,6 +1288,7 @@ function checkCollisions() {
             spawnHitParticles(boss.x + boss.width / 2, boss.y + boss.height / 2, "#c4b5fd", 8);
             if (!bullet.pierce) bullets.splice(bulletIndex, 1);
             if (boss.hp <= 0) {
+                createExplosionSound(true);
                 score += 1200 + round * 60;
                 spawnPowerup(boss.x + boss.width / 2, boss.y + boss.height / 2);
                 boss = null;
@@ -1111,6 +1309,13 @@ function checkCollisions() {
             ) {
                 score += saucer.points;
                 shotsHit++;
+                playTone({
+                    frequency: midiToFreq(84),
+                    glideTo: midiToFreq(72),
+                    duration: 0.17,
+                    gain: 0.1,
+                    type: "square",
+                });
                 spawnHitParticles(saucer.x + saucer.width / 2, saucer.y + saucer.height / 2, "#fca5a5", 12);
                 bullets.splice(bulletIndex, 1);
                 saucer = null;
@@ -1223,6 +1428,7 @@ function checkCollisions() {
 
 function shoot(mode = "normal") {
     if (shootCooldown > 0) return;
+    if (!audioEnabled) startAudio();
     if (audioContext && audioContext.state === "suspended") audioContext.resume();
 
     const isChargeShot = mode === "charge";
@@ -1319,13 +1525,25 @@ function moveEnemies() {
 
     if (hitEdge) {
         enemyDirection *= -1;
+        const dropStep = round <= 3
+            ? GAME_CONFIG.earlyRoundDropStep + (round - 1) * 1.5
+            : Math.min(
+                GAME_CONFIG.lateRoundDropStep,
+                GAME_CONFIG.earlyRoundDropStep + 3 + (round - 3) * 1.2,
+            );
         for (const enemy of enemies) {
-            if (!enemy.dive) enemy.y += 18;
+            if (!enemy.dive) enemy.y += dropStep;
         }
     } else {
         for (const enemy of enemies) {
             if (!enemy.dive) enemy.x += enemySpeed * enemyDirection;
         }
+    }
+
+    const marchInterval = Math.max(7, 22 - Math.floor(round * 0.8));
+    if (frameCount - lastMarchTickFrame >= marchInterval) {
+        playEnemyMarchTick();
+        lastMarchTickFrame = frameCount;
     }
 
     for (const enemy of enemies) {
@@ -1337,10 +1555,24 @@ function moveEnemies() {
                 enemy.x = Math.min(canvas.width - enemy.width - 4, Math.max(4, enemy.x % canvas.width));
                 enemy.y = 30;
             }
-        } else if (Math.random() < GAME_CONFIG.diveAttackChance + round * 0.0002 && enemy.type !== "tank") {
+        } else if (
+            Math.random() < (
+                round <= 3
+                    ? GAME_CONFIG.diveAttackChance * 0.2 + (round - 1) * 0.0001
+                    : GAME_CONFIG.diveAttackChance * 0.6 + (round - 3) * 0.00016
+            )
+            && enemy.type !== "tank"
+        ) {
             enemy.dive = true;
             enemy.diveDx = (player.x + player.width / 2 < enemy.x ? -1 : 1) * (1.4 + Math.random() * 1.2);
-            enemy.diveDy = 1.5 + Math.random() * 1.6;
+            const diveSpeedCap = round <= 3
+                ? GAME_CONFIG.earlyRoundDiveSpeedMax
+                : Math.min(
+                    GAME_CONFIG.lateRoundDiveSpeedMax,
+                    GAME_CONFIG.earlyRoundDiveSpeedMax + (round - 3) * 0.23,
+                );
+            enemy.diveDy = GAME_CONFIG.earlyRoundDiveSpeedMin
+                + Math.random() * (diveSpeedCap - GAME_CONFIG.earlyRoundDiveSpeedMin);
         }
     }
 }
@@ -1359,6 +1591,13 @@ function dropEnemyBombs() {
     if (boss) {
         boss.bombCooldown--;
         if (boss.bombCooldown <= 0) {
+            playTone({
+                frequency: 240,
+                glideTo: 180,
+                duration: 0.09,
+                gain: 0.07,
+                type: "square",
+            });
             enemyBombs.push({
                 x: boss.x + boss.width / 2 - 3,
                 y: boss.y + boss.height,
@@ -1421,6 +1660,13 @@ function moveEnemyBombs() {
 function loseLife() {
     if (playerPowerups.shield > 0) {
         playerPowerups.shield = 0;
+        playTone({
+            frequency: 720,
+            glideTo: 340,
+            duration: 0.12,
+            gain: 0.1,
+            type: "triangle",
+        });
         addShake(6, 8);
         return;
     }
@@ -1429,11 +1675,19 @@ function loseLife() {
     comboCount = 0;
     comboTimer = 0;
     lives--;
+    createDamageSound();
     addShake(10, 12);
     spawnHitParticles(player.x + player.width / 2, player.y + player.height / 2, "#f87171", 14);
 
     if (lives <= 0) {
         gameOver = true;
+        playTone({
+            frequency: midiToFreq(52),
+            glideTo: midiToFreq(40),
+            duration: 0.45,
+            gain: 0.13,
+            type: "sawtooth",
+        });
         scoreMode = autoPlay && manualControlFrames < 150 ? "auto" : "manual";
         highScores = loadHighScores(scoreMode);
         const qualifies = isHighScore(highScores, score);
