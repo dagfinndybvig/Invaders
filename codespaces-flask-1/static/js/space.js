@@ -701,7 +701,9 @@ function handleKeyDown(event) {
     if (event.key === " " && !autoPlay) {
         event.preventDefault();
         inputState.fireHeld = true;
-        fireBuffer = Math.min(4, fireBuffer + 1);
+        if (!event.repeat) {
+            fireBuffer = autoFireEnabled ? Math.min(4, fireBuffer + 1) : 1;
+        }
     }
     if (event.key === "c" || event.key === "C") {
         isCharging = true;
@@ -710,8 +712,14 @@ function handleKeyDown(event) {
     if (event.key === "s" || event.key === "S") {
         toggleAutoPlay();
     }
-    if (event.key === "f" || event.key === "F") {
+    if ((event.key === "f" || event.key === "F") && !event.repeat) {
         autoFireEnabled = !autoFireEnabled;
+        playTone({
+            frequency: autoFireEnabled ? 760 : 420,
+            duration: 0.08,
+            gain: 0.08,
+            type: "square",
+        });
         updateControlText();
     }
     if (event.key === "[" || event.key === "{") {
@@ -757,7 +765,7 @@ function updateControlText() {
         controlText.textContent = "Auto-play ON | press S to return | leaderboard: AUTO";
         return;
     }
-    controlText.textContent = `Arrows move, hold SPACE auto-fire, C charge-shot, F toggle auto-fire, [ ] touch sensitivity (${touchMoveSpeed})`;
+    controlText.textContent = `Arrows move, hold SPACE auto-fire, C charge-shot, F auto-fire ${autoFireEnabled ? "ON" : "OFF"}, [ ] touch sensitivity (${touchMoveSpeed})`;
 }
 
 function autoPlayAI() {
