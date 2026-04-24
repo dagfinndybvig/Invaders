@@ -1,6 +1,6 @@
-# Flask Space Invaders
+# Space Invaders
 
-Classic-style Space Invaders built with Flask and HTML canvas.
+Classic-style Space Invaders
 
 ## Play online
 
