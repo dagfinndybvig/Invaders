@@ -16,9 +16,9 @@ python app.py
 
 Open `http://127.0.0.1:5000` in your browser.
 
-## GitHub Spark-ready app
+## Static web app build
 
-This repo now includes a static Spark-friendly bundle in `spark-app\`:
+This repo includes a static web bundle in `spark-app\`:
 
 ```text
 spark-app\

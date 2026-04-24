@@ -25,7 +25,7 @@ Both entrypoints load the same shared Flask app and serve the same routes:
 - `/` landing page
 - `/space` game page
 
-For static deployment targets (like Spark), use `..\spark-app\` from repository root.
+For static deployment targets, use `..\spark-app\` from repository root.
 
 ## Current gameplay highlights
 
