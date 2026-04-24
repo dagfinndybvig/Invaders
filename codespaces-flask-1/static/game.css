@@ -1,0 +1,123 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+    color: #fff;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.game-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 16px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+#gameCanvas {
+    border: 2px solid #00ff88;
+    border-radius: 8px;
+    background: #000;
+    max-width: 100%;
+    height: auto;
+    box-shadow: 0 0 30px rgba(0, 255, 136, 0.2);
+}
+
+.controls {
+    margin-top: 14px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+}
+
+.touch-controls {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 12px;
+    border-top: 2px solid rgba(0, 255, 136, 0.3);
+    z-index: 1000;
+}
+
+.touch-buttons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.touch-btn,
+.autoplay-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+.touch-btn {
+    background: rgba(0, 255, 136, 0.2);
+    border: 2px solid #00ff88;
+    border-radius: 50%;
+    color: #fff;
+    width: 60px;
+    height: 60px;
+    font-size: 1.2rem;
+}
+
+.touch-shoot {
+    background: rgba(255, 0, 102, 0.2);
+    border-color: #ff0066;
+    width: 80px;
+    height: 80px;
+}
+
+.touch-autoplay {
+    margin-top: 10px;
+    text-align: center;
+}
+
+.autoplay-btn {
+    background: rgba(0, 170, 255, 0.3);
+    border: 2px solid #00aaff;
+    border-radius: 50%;
+    color: #00aaff;
+    width: 50px;
+    height: 50px;
+    margin: 0 auto;
+    font-weight: 700;
+}
+
+.autoplay-btn.active {
+    background: rgba(0, 255, 136, 0.4);
+    border-color: #00ff88;
+    color: #00ff88;
+}
+
+@media screen and (max-width: 768px) {
+    .touch-controls {
+        display: block;
+    }
+
+    #gameCanvas {
+        margin-bottom: 100px;
+    }
+
+    .controls {
+        margin-bottom: 100px;
+    }
+}

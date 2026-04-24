@@ -1,18 +1,34 @@
+# Flask Space Invaders
 
-<img width="814" height="741" alt="space2" src="https://github.com/user-attachments/assets/33fc924d-eeb6-4cff-b50d-9894dad4814d" />
+Classic-style Space Invaders built with Flask and HTML canvas.
 
-<h1>Vibe-coded version of the classic game Space Invaders</h1>
+## Run locally
 
-<b>The actual game is a Flask app in the subdirectory codespaces-flask-1!</b>
-
-Play it on [dagfinn.pythonanywhere.com/](https://dagfinn.pythonanywhere.com/)
-
-Or go to /codespaces-flask-1 and start with
-
+```bash
+python -m pip install -r requirements.txt
 python app.py
+```
 
-Given that you have installed the right dependencies.
+Open `http://127.0.0.1:5000` in your browser.
 
-(At the top level of this project it is more of a stub of a game that can be used to develop a different version.)
+## Project layout
 
-
+```text
+.
+├── app.py                         # Canonical entrypoint
+├── invaders_app.py                # Shared Flask app factory/routes
+├── requirements.txt               # Canonical Python dependencies
+└── codespaces-flask-1
+    ├── app.py                     # Compatibility entrypoint
+    ├── templates
+    │   ├── index.html             # Landing page
+    │   └── space.html             # Game page
+    └── static
+        ├── landing.css            # Landing-page styles
+        ├── game.css               # Game-page styles
+        └── js
+            ├── space.js           # Main game loop/render/collision logic
+            ├── space-config.js    # Gameplay constants
+            ├── space-device.js    # Mobile/haptics helpers
+            └── space-storage.js   # High-score persistence logic
+```

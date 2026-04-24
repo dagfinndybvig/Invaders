@@ -1,4 +1,12 @@
 // This file contains the JavaScript code that implements the Space Invaders game logic.
+import { GAME_CONFIG } from "./space-config.js";
+import { hapticFeedback, isMobileDevice } from "./space-device.js";
+import {
+    checkAndAddHighScore,
+    isHighScore,
+    loadHighScores,
+    saveHighScores,
+} from "./space-storage.js";
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -13,29 +21,21 @@ let score = 0;
 let lives = 3;
 let gameOver = false;
 let enemyDirection = 1; // 1 for right, -1 for left
-let enemySpeed = 2;
-let baseEnemySpeed = 2; // Base speed for enemies
-let bombDropChance = 0.001; // Probability per frame per enemy
-let baseBombDropChance = 0.001; // Base bomb drop rate
-let saucerSpawnChance = 0.002; // Increased from 0.0005 to 0.002 (0.2% chance per frame)
-let saucerSpeed = 2;
+let enemySpeed = GAME_CONFIG.baseEnemySpeed;
+let bombDropChance = GAME_CONFIG.baseBombDropChance;
 let autoPlay = false; // Auto-play feature toggle (start with OFF)
 let autoPlayShootTimer = 0; // Timer for auto-shooting
 let gameOverDisplayTime = 0; // Track frames since game over
 let round = 1; // Current round number
-const SPEED_INCREASE_PER_ROUND = 0.5; // 50% speed increase per round
 let highScores = []; // High score table
-let playerName = ''; // Player name for high score entry
 let showingHighScoreEntry = false; // Whether we're in high score entry mode
 let isNewHighScore = false; // Whether player achieved a new high score
 let enteringName = false; // Whether player is entering their name
 let currentNameInput = ''; // Current name being typed
 let shootCooldown = 0; // Cooldown timer for shooting
-const SHOOT_COOLDOWN_FRAMES = 15; // Minimum frames between shots
 
 // Audio context for sound effects
 let audioContext;
-let shootSound;
 
 function init() {
     // Initialize responsive canvas
@@ -45,7 +45,7 @@ function init() {
     createEnemies();
     createBarriers();
     initAudio();
-    loadHighScores();
+    highScores = loadHighScores();
     
     // Setup input handlers
     document.addEventListener('keydown', handleKeyDown);
@@ -65,9 +65,8 @@ function init() {
 
 // Mobile detection and responsive canvas sizing
 function detectMobile() {
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                     window.innerWidth <= 768;
-    
+    const isMobile = isMobileDevice();
+
     if (isMobile) {
         // Show touch controls
         const touchControls = document.getElementById('touchControls');
@@ -85,12 +84,6 @@ function detectMobile() {
         autoPlay = false;
         updateAutoplayButton();
     }
-}
-
-// Helper function to check if user is on mobile
-function isMobileDevice() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-           window.innerWidth <= 768;
 }
 
 function resizeCanvas() {
@@ -125,13 +118,6 @@ function setupTouchControls() {
     // Movement buttons
     let leftPressed = false;
     let rightPressed = false;
-    
-    // Add haptic feedback function
-    function hapticFeedback() {
-        if (navigator.vibrate) {
-            navigator.vibrate(50); // 50ms vibration
-        }
-    }
     
     // Left button
     leftBtn.addEventListener('touchstart', (e) => {
@@ -203,13 +189,10 @@ function setupTouchControls() {
     setTimeout(() => {
         const autoplayBtn = document.getElementById('autoplayBtn');
         if (autoplayBtn) {
-            console.log('Autoplay button found, setting up events');
-            
             // Use touchend for mobile and click for desktop
             autoplayBtn.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('Autoplay touchend triggered');
                 toggleAutoPlay();
                 hapticFeedback();
             });
@@ -217,7 +200,6 @@ function setupTouchControls() {
             autoplayBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('Autoplay click triggered');
                 toggleAutoPlay();
                 hapticFeedback();
             });
@@ -226,27 +208,14 @@ function setupTouchControls() {
             autoplayBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('Autoplay touchstart');
             });
-            
-            console.log('Autoplay button initialized');
-        } else {
-            console.log('Autoplay button not found');
         }
     }, 100);
-}
-
-// Haptic feedback function
-function hapticFeedback() {
-    if (navigator.vibrate) {
-        navigator.vibrate(50);
-    }
 }
 
 // Toggle autoplay and update button
 function toggleAutoPlay() {
     autoPlay = !autoPlay;
-    console.log('Toggling autoplay to:', autoPlay);
     updateAutoplayButton();
     updateControlText();
 }
@@ -254,7 +223,6 @@ function toggleAutoPlay() {
 // Update autoplay button appearance
 function updateAutoplayButton() {
     const autoplayBtn = document.getElementById('autoplayBtn');
-    console.log('Updating autoplay button, autoPlay is:', autoPlay, 'button found:', !!autoplayBtn);
     if (autoplayBtn) {
         // Always show 'S', just change the visual state
         autoplayBtn.textContent = 'S';
@@ -332,7 +300,7 @@ function createBarriers() {
 }
 
 function spawnSaucer() {
-    if (!saucer && Math.random() < saucerSpawnChance) {
+    if (!saucer && Math.random() < GAME_CONFIG.saucerSpawnChance) {
         const direction = Math.random() < 0.5 ? 1 : -1; // Random direction
         saucer = {
             x: direction === 1 ? -50 : canvas.width + 50,
@@ -347,7 +315,7 @@ function spawnSaucer() {
 
 function moveSaucer() {
     if (saucer) {
-        saucer.x += saucerSpeed * saucer.direction;
+        saucer.x += GAME_CONFIG.saucerSpeed * saucer.direction;
         
         // Remove saucer when it goes off screen
         if (saucer.x < -60 || saucer.x > canvas.width + 60) {
@@ -386,7 +354,7 @@ function handleKeyDown(event) {
                 for (let i = 0; i < highScores.length; i++) {
                     if (highScores[i].score === score && highScores[i].name === 'Player') {
                         highScores[i].name = finalName;
-                        saveHighScores();
+                        saveHighScores(highScores);
                         break;
                     }
                 }
@@ -395,7 +363,7 @@ function handleKeyDown(event) {
         } else if (event.key === 'Backspace') {
             event.preventDefault();
             currentNameInput = currentNameInput.slice(0, -1);
-        } else if (event.key.length === 1 && currentNameInput.length < 10) {
+        } else if (event.key.length === 1 && currentNameInput.length < GAME_CONFIG.desktopNameMaxLength) {
             // Only allow alphanumeric and basic characters
             if (/[a-zA-Z0-9 ]/.test(event.key)) {
                 currentNameInput += event.key;
@@ -714,43 +682,6 @@ function drawMonster(x, y, width, height) {
     }
 }
 
-function loadHighScores() {
-    const saved = localStorage.getItem('spaceInvadersHighScores');
-    if (saved) {
-        highScores = JSON.parse(saved);
-    } else {
-        // Initialize with default scores
-        highScores = [
-            { name: '---', score: 0 },
-            { name: '---', score: 0 },
-            { name: '---', score: 0 },
-            { name: '---', score: 0 },
-            { name: '---', score: 0 }
-        ];
-    }
-}
-
-function saveHighScores() {
-    localStorage.setItem('spaceInvadersHighScores', JSON.stringify(highScores));
-}
-
-function checkAndAddHighScore(name, playerScore) {
-    // Check if score qualifies for high score table
-    if (highScores.length < 5 || playerScore > highScores[highScores.length - 1].score) {
-        highScores.push({ name: name, score: playerScore });
-        highScores.sort((a, b) => b.score - a.score);
-        highScores = highScores.slice(0, 5); // Keep only top 5
-        saveHighScores();
-        return true;
-    }
-    return false;
-}
-
-function isHighScore(playerScore) {
-    // Check if score qualifies without adding it yet
-    return highScores.length < 5 || playerScore > highScores[highScores.length - 1].score;
-}
-
 function drawHighScores() {
     const centerX = canvas.width / 2;
     const startY = 200;
@@ -951,10 +882,10 @@ function nextRound() {
     round++;
     
     // Increase enemy speed by the speed multiplier
-    enemySpeed = baseEnemySpeed * (1 + (round - 1) * SPEED_INCREASE_PER_ROUND);
+    enemySpeed = GAME_CONFIG.baseEnemySpeed * (1 + (round - 1) * GAME_CONFIG.speedIncreasePerRound);
     
     // Increase bomb drop rate by the same factor
-    bombDropChance = baseBombDropChance * (1 + (round - 1) * SPEED_INCREASE_PER_ROUND);
+    bombDropChance = GAME_CONFIG.baseBombDropChance * (1 + (round - 1) * GAME_CONFIG.speedIncreasePerRound);
     
     // Clear bullets and bombs
     bullets = [];
@@ -988,8 +919,8 @@ function restartGame() {
     enemyDirection = 1;
     autoPlayShootTimer = 0;
     round = 1;
-    enemySpeed = baseEnemySpeed;
-    bombDropChance = baseBombDropChance;
+    enemySpeed = GAME_CONFIG.baseEnemySpeed;
+    bombDropChance = GAME_CONFIG.baseBombDropChance;
     showingHighScoreEntry = false;
     isNewHighScore = false;
     shootCooldown = 0;
@@ -1138,7 +1069,7 @@ function shoot() {
     
     bullets.push({ x: player.x + player.width / 2 - 2, y: player.y, width: 4, height: 10 });
     createShootSound(); // Play sound effect
-    shootCooldown = SHOOT_COOLDOWN_FRAMES; // Reset cooldown
+    shootCooldown = GAME_CONFIG.shootCooldownFrames; // Reset cooldown
 }
 
 function moveEnemies() {
@@ -1194,7 +1125,7 @@ function loseLife() {
     if (lives <= 0) {
         gameOver = true;
         // Check if it's a new high score
-        isNewHighScore = isHighScore(score);
+        isNewHighScore = isHighScore(highScores, score);
         
         if (isNewHighScore) {
             // Determine name based on play mode and device
@@ -1207,7 +1138,10 @@ function loseLife() {
                 playerName = 'Player'; // Temporary name for desktop (will allow editing)
             }
             
-            checkAndAddHighScore(playerName, score);
+            const highScoreResult = checkAndAddHighScore(highScores, playerName, score);
+            if (highScoreResult.added) {
+                highScores = highScoreResult.scores;
+            }
             showingHighScoreEntry = true;
             
             // Only allow name entry for desktop non-autoplay users
