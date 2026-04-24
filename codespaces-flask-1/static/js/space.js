@@ -54,6 +54,7 @@ let tookDamageThisRound = false;
 let nearMissAwardedThisFrame = false;
 let scoreMultiplierFrames = 0;
 let manualControlFrames = 0;
+let frameCount = 0;
 
 const inputState = {
     left: false,
@@ -69,6 +70,84 @@ const playerPowerups = {
 };
 
 let audioContext;
+
+const INVADER_SPRITES = {
+    fast: {
+        color: "#67e8f9",
+        frames: [
+            [
+                "..#.....#..",
+                "...#...#...",
+                "..#######..",
+                ".##.###.##.",
+                "###########",
+                "#.#######.#",
+                "#.#.....#.#",
+                "...##.##...",
+            ],
+            [
+                "..#.....#..",
+                "#..#...#..#",
+                "#.#######.#",
+                "###.###.###",
+                "###########",
+                "..#######..",
+                ".##.....##.",
+                "#...#.#...#",
+            ],
+        ],
+    },
+    shooter: {
+        color: "#a3e635",
+        frames: [
+            [
+                "...#####...",
+                "..##.#.##..",
+                ".#########.",
+                "##.##.##.##",
+                "###########",
+                "..##...##..",
+                ".##.....##.",
+                "##.......##",
+            ],
+            [
+                "...#####...",
+                ".##.#.#.##.",
+                "###########",
+                "##.##.##.##",
+                ".#########.",
+                "...##.##...",
+                "..##...##..",
+                ".#.......#.",
+            ],
+        ],
+    },
+    tank: {
+        color: "#fca5a5",
+        frames: [
+            [
+                "...#####...",
+                "..#######..",
+                ".#########.",
+                "###########",
+                "###.###.###",
+                "###########",
+                ".##.....##.",
+                "##.#...#.##",
+            ],
+            [
+                "...#####...",
+                ".#########.",
+                "###########",
+                "###.###.###",
+                "###########",
+                ".#########.",
+                "##..#.#..##",
+                "..##...##..",
+            ],
+        ],
+    },
+};
 
 function init() {
     resizeCanvas();
@@ -540,6 +619,7 @@ function autoPlayAI() {
 }
 
 function gameLoop() {
+    frameCount++;
     if (shakeFrames > 0) {
         shakeFrames--;
     } else {
@@ -671,19 +751,32 @@ function drawBullets() {
 }
 
 function drawEnemies() {
+    const animationFrame = Math.floor(frameCount / 18) % 2;
     for (const enemy of enemies) {
-        if (enemy.type === "tank") ctx.fillStyle = "#f97316";
-        else if (enemy.type === "shooter") ctx.fillStyle = "#facc15";
-        else ctx.fillStyle = "#fb7185";
-        ctx.fillRect(enemy.x + 4, enemy.y + 7, enemy.width - 8, enemy.height - 7);
-        ctx.fillStyle = "#111";
-        ctx.fillRect(enemy.x + 10, enemy.y + 8, 4, 4);
-        ctx.fillRect(enemy.x + enemy.width - 14, enemy.y + 8, 4, 4);
+        const spriteSet = INVADER_SPRITES[enemy.type] || INVADER_SPRITES.fast;
+        const sprite = spriteSet.frames[animationFrame];
+        const pixelSize = 3;
+        const spriteWidth = sprite[0].length * pixelSize;
+        const spriteHeight = sprite.length * pixelSize;
+        const drawX = enemy.x + (enemy.width - spriteWidth) / 2;
+        const drawY = enemy.y + (enemy.height - spriteHeight) / 2;
+
+        ctx.shadowBlur = enemy.dive ? 12 : 8;
+        ctx.shadowColor = spriteSet.color;
+        for (let row = 0; row < sprite.length; row++) {
+            for (let col = 0; col < sprite[row].length; col++) {
+                if (sprite[row][col] !== "#") continue;
+                ctx.fillStyle = spriteSet.color;
+                ctx.fillRect(drawX + col * pixelSize, drawY + row * pixelSize, pixelSize, pixelSize);
+            }
+        }
+        ctx.shadowBlur = 0;
+
         if (enemy.dive) {
-            ctx.strokeStyle = "rgba(255,255,255,0.4)";
+            ctx.strokeStyle = "rgba(255,255,255,0.45)";
             ctx.beginPath();
             ctx.moveTo(enemy.x + enemy.width / 2, enemy.y + enemy.height);
-            ctx.lineTo(enemy.x + enemy.width / 2 - enemy.diveDx * 5, enemy.y + enemy.height + 15);
+            ctx.lineTo(enemy.x + enemy.width / 2 - enemy.diveDx * 6, enemy.y + enemy.height + 18);
             ctx.stroke();
         }
     }
@@ -691,10 +784,23 @@ function drawEnemies() {
 
 function drawBoss() {
     if (!boss) return;
-    ctx.fillStyle = "#a855f7";
-    ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
-    ctx.fillStyle = "#f5d0fe";
-    ctx.fillRect(boss.x + 18, boss.y + 10, boss.width - 36, 18);
+    const animationFrame = Math.floor(frameCount / 20) % 2;
+    const bossSprite = INVADER_SPRITES.tank.frames[animationFrame];
+    const pixelSize = 8;
+    const spriteWidth = bossSprite[0].length * pixelSize;
+    const spriteHeight = bossSprite.length * pixelSize;
+    const drawX = boss.x + (boss.width - spriteWidth) / 2;
+    const drawY = boss.y + (boss.height - spriteHeight) / 2;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = "#c084fc";
+    for (let row = 0; row < bossSprite.length; row++) {
+        for (let col = 0; col < bossSprite[row].length; col++) {
+            if (bossSprite[row][col] !== "#") continue;
+            ctx.fillStyle = row < 3 ? "#f5d0fe" : "#c084fc";
+            ctx.fillRect(drawX + col * pixelSize, drawY + row * pixelSize, pixelSize, pixelSize);
+        }
+    }
+    ctx.shadowBlur = 0;
 
     const hpRatio = Math.max(0, boss.hp / boss.maxHp);
     ctx.strokeStyle = "#fff";
@@ -721,12 +827,26 @@ function drawBarriers() {
 
 function drawSaucer() {
     if (!saucer) return;
-    ctx.fillStyle = "red";
-    ctx.fillRect(saucer.x + 5, saucer.y + 5, saucer.width - 10, saucer.height - 5);
-    ctx.fillStyle = "orange";
-    ctx.beginPath();
-    ctx.arc(saucer.x + saucer.width / 2, saucer.y + 8, 8, 0, Math.PI * 2);
-    ctx.fill();
+    const saucerSprite = [
+        "...#######...",
+        "..#########..",
+        "#############",
+        "##.#######.##",
+        "...##...##...",
+    ];
+    const pixelSize = 3;
+    const drawX = saucer.x - 1;
+    const drawY = saucer.y + 1;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = "#f87171";
+    for (let row = 0; row < saucerSprite.length; row++) {
+        for (let col = 0; col < saucerSprite[row].length; col++) {
+            if (saucerSprite[row][col] !== "#") continue;
+            ctx.fillStyle = row < 2 ? "#fca5a5" : "#ef4444";
+            ctx.fillRect(drawX + col * pixelSize, drawY + row * pixelSize, pixelSize, pixelSize);
+        }
+    }
+    ctx.shadowBlur = 0;
 }
 
 function drawPowerups() {
